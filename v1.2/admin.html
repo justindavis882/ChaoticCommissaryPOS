@@ -63,37 +63,52 @@
 
         /* Print Media Queries */
         @media print {
-            body * { visibility: hidden !important; }
-            #print-area, #print-area *, #print-id-area, #print-id-area *, #print-report-area, #print-report-area * { visibility: visible !important; }
+            /* 1. Break out of Tailwind's screen layout */
+            body, html, main {
+                display: block !important;
+                height: auto !important;
+                width: auto !important;
+                overflow: visible !important;
+                position: static !important;
+            }
             
-            /* Thermal Printers */
+            /* 2. Hide the sidebar and top header completely */
+            aside, header, .no-print, #modal-backdrop {
+                display: none !important;
+            }
+
+            /* 3. Hide all remaining elements, only reveal print areas */
+            body * { visibility: hidden !important; }
+            #print-area, #print-area *, #print-id-area, #print-id-area *, #print-report-area, #print-report-area * { 
+                visibility: visible !important; 
+            }
+
+            /* 4. Thermal Printers (Receipts & IDs) */
             #print-area, #print-id-area {
                 position: absolute;
                 left: 0;
                 top: 0;
                 width: 300px;
-                margin: 0 auto;
+                margin: 0;
                 padding: 10px;
                 background: white;
                 color: black;
                 font-family: monospace;
             }
 
-            /* Standard Document Printers */
+            /* 5. Standard Document Printers (8.5x11 Reports) */
             #print-report-area {
-                display: block !important; /* This overrides Tailwind's hidden class safely */
+                display: block !important;
                 position: absolute;
                 left: 0;
                 top: 0;
-                width: 100%;
+                width: 100% !important;
+                min-width: 800px; /* Forces a full 8.5x11 width so columns don't squish */
                 margin: 0;
                 padding: 0;
                 background: white;
                 color: black;
             }
-
-            #modal-backdrop { background: transparent !important; }
-            .no-print { display: none !important; }
         }
     </style>
 </head>
@@ -1703,7 +1718,7 @@
                     </table>
                 </div>
             `;
-            
+
             window.print();
         }
 
