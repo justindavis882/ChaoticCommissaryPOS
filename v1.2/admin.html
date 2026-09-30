@@ -1607,10 +1607,12 @@
             await fetchReceipts();
             await fetchInventory();
 
-            const startDate = new Date(startVal);
-            startDate.setHours(0, 0, 0, 0);
-            const endDate = new Date(endVal);
-            endDate.setHours(23, 59, 59, 999);
+            // Explicitly parse as local time instead of UTC to fix day-shifting
+            const [sYear, sMonth, sDay] = startVal.split('-');
+            const startDate = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0);
+            
+            const [eYear, eMonth, eDay] = endVal.split('-');
+            const endDate = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999);
 
             const diffTime = Math.abs(endDate - startDate);
             const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
