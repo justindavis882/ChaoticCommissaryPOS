@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal POS System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background-color: #0f172a; /* tailwind slate-900 */
+            color: #e2e8f0; /* tailwind slate-200 */
+            overflow: hidden; /* Prevent scrolling, POS should be fixed */
+            user-select: none; /* Prevent accidental text selection */
+        }
+
+        /* Hide scrollbars for cleaner POS look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+
+        /* Input styling */
+        input {
+            background-color: #1e293b;
+            color: #10b981; /* Terminal green */
+            border: 2px solid #334155;
+            outline: none;
+        }
+        input:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+
+        /* Selected row in inventory */
+        .selected-row {
+            background-color: #2563eb !important; /* blue-600 */
+            color: #ffffff;
+        }
+
+        /* Toast notification */
+        #toast {
+            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+            transform: translateY(20px);
+            opacity: 0;
+            pointer-events: none;
+        }
+        #toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .screen {
+            display: none;
+            height: 100vh;
+            width: 100vw;
+            flex-direction: column;
+        }
+        .screen.active {
+            display: flex;
+        }
+
+        /* Print Media Queries for Receipt */
+        @media print {
+    body * {
+        visibility: hidden !important;
+        }
+        #print-receipt, #print-receipt * {
+            visibility: visible !important;
+        }
+        #print-receipt {
+            display: block !important; /* Overrides Tailwind .hidden */
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 300px;
+            margin: 0;
+            padding: 10px;
+            background: white;
+            color: black;
+            font-family: 'JetBrains Mono', monospace;
+        }
+    }
+    </style>
+</head>
+<body>
+
+    
+    <!-- 1. LOCK SCREEN -->
+    <div id="screen-lock" class="screen active justify-center items-center">
+        <div class="text-center bg-slate-800 p-10 rounded-xl shadow-2xl border border-slate-700 w-96">
+            <h1 class="text-4xl font-bold text-blue-400 mb-2">SYSTEM LOCKED</h1>
+            <p class="text-slate-400 mb-8 text-sm">Enter PIN or scan badge to unlock</p>
+            
+            <input type="password" id="pin-input" class="w-full text-center text-3xl p-4 rounded-lg tracking-[0.5em] mb-4" placeholder="••••">
+            
+            <div class="text-sm text-slate-500 mt-4">
+                [ENTER] to Login<br>
+                <span class="text-xs mt-2 block opacity-70">System Version 1.1</span>
+                <button class="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white py-2 px-4 rounded-lg transition-colors" onclick="window.location.href='index.html'">Go Back</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. REGISTER SCREEN -->
+    <div id="screen-register" class="screen p-4 flex-row gap-4">
+        <!-- Left Side: Cart -->
+        <div class="flex-1 flex flex-col bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+            <div class="p-4 bg-slate-900 border-b border-slate-700 flex justify-between items-center">
+                <h2 class="text-xl font-bold text-blue-400">CURRENT TICKET</h2>
+                <span class="text-sm text-slate-400" id="register-clock">00:00:00</span>
+            </div>
+            
+            <!-- Cart Items -->
+            <div class="flex-1 overflow-y-auto p-2" id="cart-list">
+                <!-- Items populated via JS -->
+            </div>
+
+            <!-- Totals -->
+            <div class="p-4 bg-slate-900 border-t border-slate-700">
+                <div class="flex justify-between text-slate-400 mb-2">
+                    <span>Tax (0%):</span>
+                    <span>$0.00</span>
+                </div>
+                <div class="flex justify-between text-3xl font-bold text-green-400">
+                    <span>TOTAL:</span>
+                    <span id="register-total">$0.00</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side: Input & Controls -->
+        <div class="w-1/3 flex flex-col gap-4">
+            <div class="bg-slate-800 rounded-xl border border-slate-700 p-6 flex-1 flex flex-col">
+                <h3 class="text-lg text-slate-400 mb-4">SCAN OR ENTER SKU</h3>
+                <input type="text" id="sku-input" class="w-full text-2xl p-4 rounded-lg mb-4 text-center font-bold" placeholder="READY...">
+                
+                <div class="mt-auto grid grid-cols-1 gap-3 text-sm">
+                    <div class="bg-slate-700 p-3 rounded flex justify-between items-center border border-slate-600">
+                        <span>PAYMENT</span>
+                        <kbd class="bg-slate-900 px-2 py-1 rounded text-blue-400 font-bold border border-slate-500">F9</kbd>
+                    </div>
+                    <div class="bg-slate-700 p-3 rounded flex justify-between items-center border border-slate-600">
+                        <span>INVENTORY</span>
+                        <kbd class="bg-slate-900 px-2 py-1 rounded text-blue-400 font-bold border border-slate-500">F4</kbd>
+                    </div>
+                    <div class="bg-slate-700 p-3 rounded flex justify-between items-center border border-slate-600">
+                        <span>VOID LAST ITEM</span>
+                        <kbd class="bg-slate-900 px-2 py-1 rounded text-blue-400 font-bold border border-slate-500">F8</kbd>
+                    </div>
+                    <div class="bg-slate-700 p-3 rounded flex justify-between items-center border border-slate-600">
+                        <span>LOCK SYSTEM</span>
+                        <kbd class="bg-slate-900 px-2 py-1 rounded text-blue-400 font-bold border border-slate-500">ESC</kbd>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 3. PAYMENT SCREEN -->
+    <div id="screen-payment" class="screen p-4 flex-row gap-4">
+        <!-- Left: Summary -->
+        <div class="flex-1 flex flex-col gap-4">
+            <div class="bg-slate-800 rounded-xl border border-slate-700 p-8 text-center flex-1 flex flex-col justify-center">
+                <h2 class="text-2xl text-slate-400 mb-2">TOTAL DUE</h2>
+                <div class="text-6xl font-bold text-blue-400 mb-8" id="payment-total-due">$0.00</div>
+                
+                <h2 class="text-xl text-slate-400 mb-2">REMAINING BALANCE</h2>
+                <div class="text-5xl font-bold text-red-400 mb-8" id="payment-balance">$0.00</div>
+                
+                <h2 class="text-xl text-slate-400 mb-2">CHANGE DUE</h2>
+                <div class="text-5xl font-bold text-green-400" id="payment-change">$0.00</div>
+            </div>
+            
+            <!-- Applied Payments -->
+            <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 h-48 overflow-y-auto">
+                <h3 class="text-slate-400 border-b border-slate-700 pb-2 mb-2">APPLIED PAYMENTS</h3>
+                <div id="applied-payments-list" class="flex flex-col gap-2">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Actions -->
+        <div class="w-1/3 flex flex-col bg-slate-800 rounded-xl border border-slate-700 p-6 relative">
+            <h3 class="text-xl font-bold text-blue-400 mb-6">SELECT TENDER</h3>
+            
+            <div id="payment-options" class="flex flex-col gap-4 flex-1">
+                <div class="bg-slate-700 p-4 rounded-lg flex justify-between items-center border border-slate-600">
+                    <span class="text-xl">CASH</span>
+                    <kbd class="bg-slate-900 px-3 py-2 rounded text-blue-400 font-bold text-xl">1</kbd>
+                </div>
+                <div class="bg-slate-700 p-4 rounded-lg flex justify-between items-center border border-slate-600">
+                    <span class="text-xl">CREDIT/DEBIT</span>
+                    <kbd class="bg-slate-900 px-3 py-2 rounded text-blue-400 font-bold text-xl">2</kbd>
+                </div>
+                <div class="bg-slate-700 p-4 rounded-lg flex justify-between items-center border border-slate-600">
+                    <span class="text-xl">CHECK</span>
+                    <kbd class="bg-slate-900 px-3 py-2 rounded text-blue-400 font-bold text-xl">3</kbd>
+                </div>
+            </div>
+
+            <!-- Dynamic Input Area (Hidden initially) -->
+            <div id="payment-input-area" class="hidden flex-col gap-4 mt-8 bg-slate-900 p-4 rounded-lg border border-slate-700">
+                <h4 id="payment-input-title" class="text-lg text-slate-300">ENTER AMOUNT</h4>
+                <input type="number" id="payment-amount-input" class="w-full text-2xl p-3 rounded text-right" step="0.01">
+                <input type="text" id="payment-check-input" class="w-full text-2xl p-3 rounded hidden mt-2" placeholder="Check #">
+                
+                <!-- Card Type Selection -->
+                <div id="payment-card-types" class="hidden flex-col gap-3 mt-4">
+                    <div class="bg-slate-700 p-3 rounded flex justify-between items-center border border-slate-600"><span class="text-lg">VISA</span><kbd class="bg-slate-900 px-3 py-1 rounded text-blue-400 font-bold">1</kbd></div>
+                    <div class="bg-slate-700 p-3 rounded flex justify-between items-center border border-slate-600"><span class="text-lg">AMEX</span><kbd class="bg-slate-900 px-3 py-1 rounded text-blue-400 font-bold">2</kbd></div>
+                    <div class="bg-slate-700 p-3 rounded flex justify-between items-center border border-slate-600"><span class="text-lg">MASTERCARD</span><kbd class="bg-slate-900 px-3 py-1 rounded text-blue-400 font-bold">3</kbd></div>
+                    <div class="bg-slate-700 p-3 rounded flex justify-between items-center border border-slate-600"><span class="text-lg">OTHER</span><kbd class="bg-slate-900 px-3 py-1 rounded text-blue-400 font-bold">4</kbd></div>
+                </div>
+
+                <div class="text-sm text-slate-500 mt-2">[ENTER] to submit, [ESC] to cancel tender</div>
+            </div>
+
+            <div class="mt-auto border-t border-slate-700 pt-4 flex justify-between items-center text-sm text-slate-400">
+                <span>BACK TO REGISTER</span>
+                <kbd class="bg-slate-900 px-2 py-1 rounded text-slate-300 border border-slate-600">ESC</kbd>
+            </div>
+
+            <!-- Completion Overlay -->
+            <div id="payment-complete-overlay" class="hidden absolute inset-0 bg-slate-900/95 backdrop-blur rounded-xl flex flex-col justify-center items-center z-10">
+                <h2 class="text-4xl font-bold text-green-400 mb-4">TRANSACTION COMPLETE</h2>
+                <p class="text-slate-300 text-xl mb-8">Change due: <span id="overlay-change-due" class="font-bold"></span></p>
+                <div class="bg-slate-800 p-4 rounded border border-slate-600 animate-pulse">
+                    <span class="text-xl">PRINT RECEIPT & CLOSE</span>
+                    <kbd class="bg-slate-900 px-3 py-2 rounded text-blue-400 font-bold ml-4">ENTER</kbd>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. INVENTORY SCREEN -->
+    <div id="screen-inventory" class="screen p-6 flex-col gap-4">
+        <div class="flex justify-between items-end mb-2">
+            <h1 class="text-3xl font-bold text-blue-400">INVENTORY MANAGEMENT</h1>
+            <div class="text-sm text-slate-400 space-x-4">
+                <span><kbd class="bg-slate-800 px-1 rounded border border-slate-600">↑↓</kbd> Navigate</span>
+                <span><kbd class="bg-slate-800 px-1 rounded border border-slate-600">N</kbd> New</span>
+                <span><kbd class="bg-slate-800 px-1 rounded border border-slate-600">E</kbd> Edit</span>
+                <span><kbd class="bg-slate-800 px-1 rounded border border-slate-600">DEL</kbd> Delete</span>
+                <span><kbd class="bg-slate-800 px-1 rounded border border-slate-600">ESC</kbd> Back</span>
+            </div>
+        </div>
+
+        <div class="flex-1 bg-slate-800 rounded-xl border border-slate-700 overflow-hidden flex flex-col relative">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-900 border-b border-slate-700 text-slate-400">
+                        <th class="p-4 w-1/4">SKU</th>
+                        <th class="p-4 w-1/2">NAME</th>
+                        <th class="p-4 w-1/4 text-right">PRICE</th>
+                    </tr>
+                </thead>
+            </table>
+            <div class="flex-1 overflow-y-auto">
+                <table class="w-full text-left border-collapse">
+                    <tbody id="inventory-list">
+                        <!-- Populated via JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Form Overlay for CRUD -->
+            <div id="inventory-form-overlay" class="hidden absolute inset-0 bg-slate-900/90 backdrop-blur flex justify-center items-center z-10">
+                <div class="bg-slate-800 p-8 rounded-xl border border-slate-600 w-96 shadow-2xl">
+                    <h3 id="inv-form-title" class="text-2xl font-bold text-blue-400 mb-6">ADD ITEM</h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-slate-400 text-sm mb-1">SKU</label>
+                            <input type="text" id="inv-sku" class="w-full p-2 rounded" placeholder="Barcode / SKU">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 text-sm mb-1">Name</label>
+                            <input type="text" id="inv-name" class="w-full p-2 rounded" placeholder="Item Name">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 text-sm mb-1">Price ($)</label>
+                            <input type="number" id="inv-price" class="w-full p-2 rounded text-right" step="0.01" placeholder="0.00">
+                        </div>
+                    </div>
+
+                    <div class="mt-8 text-sm text-slate-500 text-center">
+                        [ENTER] Save &nbsp;|&nbsp; [ESC] Cancel
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Global Toast Notification -->
+    <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg font-bold z-50">
+        Notification Message
+    </div>
+
+    <!-- Hidden Print Receipt Container -->
+    <div id="print-receipt" class="hidden"></div>
+
+    <!-- Firebase SDK Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, getDocs, setDoc, deleteDoc, serverTimestamp, updateDoc, increment, enableMultiTabIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // Environment variables provided by the system
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-pos-app';
+        const firebaseConfig = {
+            apiKey: "AIzaSyDuFg74Dvh8FydVdnvKlhShWTHq7SZASC0",
+            authDomain: "chaotic-commissary.firebaseapp.com",
+            projectId: "chaotic-commissary",
+            storageBucket: "chaotic-commissary.firebasestorage.app",
+            messagingSenderId: "282428310882",
+            appId: "1:282428310882:web:226ebc367cc69c296cd83b",
+            measurementId: "G-9S32HHN1Y2"
+        };
+        const customAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        let userId = null;
+
+        // Enable Offline Persistence
+        enableMultiTabIndexedDbPersistence(db).catch((err) => {
+            if (err.code == 'failed-precondition') {
+                console.warn("Persistence failed: Multiple tabs open.");
+            } else if (err.code == 'unimplemented') {
+                console.warn("Persistence not supported by this browser.");
+            }
+        });
+
+        // Database refs (using strict paths mandated)
+        let inventoryRef;
+        let receiptsRef;
+        let accountsRef;
+
+        // Application State
+        let currentScreen = 'lock'; // lock, register, payment, inventory
+        let inventoryData = [];
+        let cart = [];
+        let payments = [];
+        let currentUserAccount = null;
+        
+        // UI Navigation State
+        let inventorySelectedIndex = 0;
+        let invFormMode = null; // 'add' or 'edit'
+        let currentPaymentType = null; // 1: Cash, 2: Credit, 3: Check
+        let pendingCreditAmount = null; // Store amount before card type
+
+        const finalSound = new Audio('final.mp3');
+
+        // Helper: Show Toast
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `fixed bottom-6 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full shadow-lg font-bold z-50 transition-all duration-300 ${isError ? 'bg-red-600' : 'bg-blue-600'} text-white`;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // Helper: Format Currency
+        const formatMoney = (amount) => `$${parseFloat(amount).toFixed(2)}`;
+
+        // Initialize App & Auth
+        async function initApp() {
+            try {
+                if (customAuthToken) {
+                    await signInWithCustomToken(auth, customAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                
+                userId = auth.currentUser.uid;
+                
+                // Set strict public data paths
+                inventoryRef = collection(db, 'artifacts', appId, 'public', 'data', 'inventory');
+                receiptsRef = collection(db, 'artifacts', appId, 'public', 'data', 'receipts');
+                accountsRef = collection(db, 'artifacts', appId, 'public', 'data', 'accounts');
+
+                await fetchInventory();
+                
+                // Start Clock
+                setInterval(() => {
+                    document.getElementById('register-clock').textContent = new Date().toLocaleTimeString();
+                }, 1000);
+
+                // Setup global focus enforcement
+                setupFocusEnforcement();
+                
+                switchScreen('lock');
+
+            } catch (error) {
+                console.error("Auth/Init Error:", error);
+                showToast("System initialization failed.", true);
+            }
+        }
+
+        async function fetchInventory() {
+            try {
+                const snapshot = await getDocs(inventoryRef);
+                inventoryData = [];
+                snapshot.forEach(doc => {
+                    inventoryData.push({ id: doc.id, ...doc.data() });
+                });
+
+                // Seed data if empty (for demonstration)
+                if (inventoryData.length === 0) {
+                    const seedData = [
+                        { sku: "1001", name: "Apple", price: 1.50 },
+                        { sku: "1002", name: "Orange", price: 0.75 },
+                        { sku: "1003", name: "Coffee", price: 3.25 },
+                        { sku: "4011", name: "Banana", price: 0.99 }
+                    ];
+                    for (const item of seedData) {
+                        await setDoc(doc(inventoryRef, item.sku), item);
+                        inventoryData.push({ id: item.sku, ...item });
+                    }
+                }
+                
+                renderInventoryList();
+            } catch (e) {
+                console.error("Inventory fetch error:", e);
+                showToast("Failed to load inventory", true);
+            }
+        }
+
+
+        function switchScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+            document.getElementById(`screen-${screenId}`).classList.add('active');
+            currentScreen = screenId;
+            
+            // Handle specific screen setups
+            if (screenId === 'lock') {
+                document.getElementById('pin-input').value = '';
+                document.getElementById('pin-input').focus();
+            } else if (screenId === 'register') {
+                document.getElementById('sku-input').value = '';
+                document.getElementById('sku-input').focus();
+                renderCart();
+            } else if (screenId === 'inventory') {
+                inventorySelectedIndex = 0;
+                renderInventoryList();
+            } else if (screenId === 'payment') {
+                resetPaymentScreen();
+            }
+        }
+
+        // Extremely aggressive focus management since NO MOUSE is allowed
+        function setupFocusEnforcement() {
+            // Whenever user clicks outside (if they accidentally use mouse) or loses focus, refocus main elements
+            document.addEventListener('click', enforceFocus);
+            
+            // Also enforce periodically just in case (POS systems often do this)
+            setInterval(enforceFocus, 500);
+        }
+
+        function enforceFocus() {
+            if (currentScreen === 'lock') {
+                document.getElementById('pin-input').focus();
+            } else if (currentScreen === 'register') {
+                document.getElementById('sku-input').focus();
+            } else if (currentScreen === 'payment' && currentPaymentType !== null) {
+                // Focus payment input if a tender is active
+                if (document.getElementById('payment-check-input').classList.contains('hidden') === false) {
+                     // Check input takes priority if visible
+                     document.getElementById('payment-check-input').focus();
+                } else {
+                     document.getElementById('payment-amount-input').focus();
+                }
+            } else if (currentScreen === 'inventory' && invFormMode !== null) {
+                // Focus is trapped in the form, handled in form logic
+            }
+        }
+
+
+        document.addEventListener('keydown', (e) => {
+            // Prevent default behavior for F-keys and standard shortcuts that might disrupt POS
+            if (['F4', 'F8', 'F9', 'F12'].includes(e.key)) {
+                e.preventDefault();
+            }
+
+            if (currentScreen === 'lock') handleLockInput(e);
+            else if (currentScreen === 'register') handleRegisterInput(e);
+            else if (currentScreen === 'payment') handlePaymentInput(e);
+            else if (currentScreen === 'inventory') handleInventoryInput(e);
+        });
+
+        
+        async function handleLockInput(e) {
+            if (e.key === 'Enter') {
+                const pinInput = document.getElementById('pin-input');
+                const pin = pinInput.value.trim();
+                if (!pin) return;
+
+                showToast("Verifying...");
+                pinInput.disabled = true;
+
+                try {
+                    const snapshot = await getDocs(accountsRef);
+                    let foundAccount = null;
+                    
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        if (data.pin === pin) {
+                            foundAccount = { id: doc.id, ...data };
+                        }
+                    });
+
+                    // Auto-seed an admin account if the collection is entirely empty
+                    if (snapshot.empty && pin === '1234') {
+                         const newAdmin = { name: "System Admin", pin: "1234", role: "manager" };
+                         await setDoc(doc(accountsRef, "admin-user"), newAdmin);
+                         foundAccount = { id: "admin-user", ...newAdmin };
+                    }
+
+                    if (foundAccount) {
+                        currentUserAccount = foundAccount;
+                        showToast(`Welcome, ${currentUserAccount.name}`);
+                        switchScreen('register');
+                    } else {
+                        showToast("Invalid PIN", true);
+                    }
+                } catch (err) {
+                    console.error("Login Error:", err);
+                    showToast("Database error during login", true);
+                } finally {
+                    pinInput.disabled = false;
+                    pinInput.value = '';
+                    setTimeout(() => pinInput.focus(), 10);
+                }
+            }
+        }
+
+
+        function handleRegisterInput(e) {
+            const input = document.getElementById('sku-input');
+            
+            // Function Keys Mapping
+            if (e.key === 'F9') { // Payment
+                if (cart.length > 0) switchScreen('payment');
+                else showToast("Cart is empty", true);
+                return;
+            }
+            if (e.key === 'F4') { // Inventory
+                switchScreen('inventory');
+                return;
+            }
+            if (e.key === 'F8') { // Void last item
+                if (cart.length > 0) {
+                    cart.pop();
+                    renderCart();
+                    showToast("Item removed");
+                }
+                return;
+            }
+            if (e.key === 'Escape') {
+                cart = []; // clear session
+                switchScreen('lock');
+                return;
+            }
+
+            // Normal Barcode/SKU entry
+            if (e.key === 'Enter') {
+                const sku = input.value.trim();
+                if (sku) {
+                    processBarcode(sku);
+                    input.value = '';
+                } else if (cart.length > 0) {
+                    // Re-ring previous item on double Enter (empty input)
+                    const lastItem = cart[cart.length - 1];
+                    processBarcode(lastItem.sku);
+                }
+            }
+        }
+
+        function processBarcode(sku) {
+            const item = inventoryData.find(i => i.sku === sku);
+            if (item) {
+                let currentPrice = item.price;
+                
+                // Calculate dynamic event pricing if a modifier is active
+                if (item.modifier && item.modifier.active) {
+                    if (item.modifier.type === 'percent') {
+                        currentPrice = currentPrice * (1 + (item.modifier.value / 100));
+                    } else if (item.modifier.type === 'flat') {
+                        currentPrice = currentPrice + item.modifier.value;
+                    }
+                    // Ensure we never charge a negative amount
+                    currentPrice = Math.max(0, currentPrice); 
+                }
+
+                // Add to cart with the mathematically adjusted price
+                cart.push({ 
+                    ...item, 
+                    price: currentPrice, 
+                    basePrice: item.price, 
+                    uid: Date.now() + Math.random() 
+                });
+                
+                renderCart();
+            } else {
+                showToast(`SKU ${sku} not found`, true);
+            }
+        }
+
+        function renderCart() {
+            const list = document.getElementById('cart-list');
+            list.innerHTML = '';
+            let subtotal = 0;
+
+            cart.forEach(item => {
+                subtotal += item.price;
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center bg-slate-700/50 p-3 rounded mb-2 border border-slate-600';
+                div.innerHTML = `
+                    <div class="flex flex-col">
+                        <span class="font-bold text-slate-200">${item.name}</span>
+                        <span class="text-xs text-slate-400">SKU: ${item.sku}</span>
+                    </div>
+                    <span class="font-bold text-green-400">${formatMoney(item.price)}</span>
+                `;
+                list.appendChild(div);
+            });
+
+            // Auto-scroll to bottom
+            list.scrollTop = list.scrollHeight;
+            document.getElementById('register-total').textContent = formatMoney(subtotal);
+        }
+
+        function getCartTotal() {
+            return cart.reduce((sum, item) => sum + item.price, 0);
+        }
+
+
+        function resetPaymentScreen() {
+            payments = [];
+            currentPaymentType = null;
+            pendingCreditAmount = null;
+            document.getElementById('payment-options').classList.remove('hidden');
+            document.getElementById('payment-input-area').classList.add('hidden');
+            document.getElementById('payment-complete-overlay').classList.add('hidden');
+            document.getElementById('payment-card-types').classList.add('hidden');
+            updatePaymentTotals();
+        }
+
+        function updatePaymentTotals() {
+            const total = getCartTotal();
+            const paid = payments.reduce((sum, p) => sum + p.amount, 0);
+            const balance = total - paid;
+
+            document.getElementById('payment-total-due').textContent = formatMoney(total);
+            
+            if (balance <= 0) {
+                document.getElementById('payment-balance').textContent = "$0.00";
+                document.getElementById('payment-change').textContent = formatMoney(Math.abs(balance));
+                
+                // Show completion overlay
+                document.getElementById('overlay-change-due').textContent = formatMoney(Math.abs(balance));
+                document.getElementById('payment-complete-overlay').classList.remove('hidden');
+            } else {
+                document.getElementById('payment-balance').textContent = formatMoney(balance);
+                document.getElementById('payment-change').textContent = "$0.00";
+            }
+
+            // Render applied payments
+            const list = document.getElementById('applied-payments-list');
+            list.innerHTML = '';
+            payments.forEach(p => {
+                list.innerHTML += `
+                    <div class="flex justify-between text-sm bg-slate-700 p-2 rounded">
+                        <span>${p.method} ${p.meta || ''}</span>
+                        <span class="text-green-400">${formatMoney(p.amount)}</span>
+                    </div>
+                `;
+            });
+        }
+
+        async function handlePaymentInput(e) {
+            const total = getCartTotal();
+            const paid = payments.reduce((sum, p) => sum + p.amount, 0);
+            const balance = total - paid;
+
+            // Handle transaction complete state
+            if (balance <= 0) {
+                if (e.key === 'Enter') {
+                    await finalizeTransaction();
+                }
+                return; // Block other inputs
+            }
+
+            // Escape cancels current tender or returns to register
+            if (e.key === 'Escape') {
+                if (currentPaymentType !== null) {
+                    currentPaymentType = null;
+                    pendingCreditAmount = null;
+                    document.getElementById('payment-options').classList.remove('hidden');
+                    document.getElementById('payment-input-area').classList.add('hidden');
+                    document.getElementById('payment-card-types').classList.add('hidden');
+                } else {
+                    switchScreen('register');
+                }
+                return;
+            }
+
+            // Selecting Tender
+            if (currentPaymentType === null) {
+                if (e.key === '1') startTender('CASH', balance);
+                if (e.key === '2') startTender('CREDIT', balance);
+                if (e.key === '3') startTender('CHECK', balance);
+                return;
+            }
+
+            // Handling Input inside a Tender
+            if (e.key === 'Enter') {
+                const amtInput = document.getElementById('payment-amount-input');
+                const chkInput = document.getElementById('payment-check-input');
+                
+                if (currentPaymentType === 'CASH') {
+                    const amt = parseFloat(amtInput.value);
+                    if (!isNaN(amt) && amt > 0) addPayment('CASH', amt);
+                } 
+                else if (currentPaymentType === 'CREDIT' && pendingCreditAmount === null) {
+                    const amt = parseFloat(amtInput.value);
+                    if (!isNaN(amt) && amt > 0) {
+                        pendingCreditAmount = amt;
+                        amtInput.classList.add('hidden');
+                        document.getElementById('payment-input-title').textContent = "SELECT CARD TYPE";
+                        document.getElementById('payment-card-types').classList.remove('hidden');
+                    }
+                }
+                else if (currentPaymentType === 'CHECK') {
+                    // Two-step process for check
+                    if (!chkInput.classList.contains('hidden') && chkInput.value.trim() !== '') {
+                        // Check number entered, hide it, focus amount
+                        chkInput.classList.add('hidden');
+                        amtInput.classList.remove('hidden');
+                        amtInput.focus();
+                        document.getElementById('payment-input-title').textContent = "ENTER CHECK AMOUNT";
+                    } else if (!amtInput.classList.contains('hidden')) {
+                        const amt = parseFloat(amtInput.value);
+                        if (!isNaN(amt) && amt > 0) addPayment('CHECK', amt, `(#${chkInput.value})`);
+                    }
+                }
+            }
+
+            // Handle Card Type Selection
+            if (currentPaymentType === 'CREDIT' && pendingCreditAmount !== null) {
+                let cardType = null;
+                if (e.key === '1') cardType = 'VISA';
+                if (e.key === '2') cardType = 'AMEX';
+                if (e.key === '3') cardType = 'MASTERCARD';
+                if (e.key === '4') cardType = 'OTHER';
+
+                if (cardType) {
+                    addPayment('CREDIT', pendingCreditAmount, `(${cardType})`);
+                    pendingCreditAmount = null;
+                    document.getElementById('payment-card-types').classList.add('hidden');
+                }
+            }
+        }
+
+        function startTender(type, balance) {
+            currentPaymentType = type;
+            document.getElementById('payment-options').classList.add('hidden');
+            const inputArea = document.getElementById('payment-input-area');
+            const amtInput = document.getElementById('payment-amount-input');
+            const chkInput = document.getElementById('payment-check-input');
+            
+            inputArea.classList.remove('hidden');
+            amtInput.classList.remove('hidden');
+            chkInput.classList.add('hidden');
+            
+            if (type === 'CASH') {
+                document.getElementById('payment-input-title').textContent = "ENTER CASH AMOUNT";
+                amtInput.value = balance.toFixed(2);
+                setTimeout(() => { amtInput.focus(); amtInput.select(); }, 10);
+            } 
+            else if (type === 'CREDIT') {
+                document.getElementById('payment-input-title').textContent = "ENTER CREDIT AMOUNT";
+                amtInput.classList.remove('hidden');
+                amtInput.value = balance.toFixed(2);
+                setTimeout(() => { amtInput.focus(); amtInput.select(); }, 10);
+            }
+            else if (type === 'CHECK') {
+                document.getElementById('payment-input-title').textContent = "ENTER CHECK NUMBER";
+                amtInput.classList.add('hidden');
+                chkInput.classList.remove('hidden');
+                chkInput.value = '';
+                amtInput.value = balance.toFixed(2);
+                setTimeout(() => chkInput.focus(), 10);
+            }
+        }
+
+        function addPayment(method, amount, meta = '') {
+            payments.push({ method, amount, meta });
+            currentPaymentType = null;
+            document.getElementById('payment-input-area').classList.add('hidden');
+            document.getElementById('payment-options').classList.remove('hidden');
+            updatePaymentTotals();
+        }
+
+        async function finalizeTransaction() {
+            showToast("Printing Receipt...");
+            
+            // Build receipt data
+            const receipt = {
+                timestamp: serverTimestamp(),
+                cashierName: currentUserAccount ? currentUserAccount.name : 'Unknown Cashier',
+                type: 'sale',
+                items: cart.map(i => ({ sku: i.sku, name: i.name, price: i.price })),
+                total: getCartTotal(),
+                payments: payments
+            };
+
+            try {
+                // Save to Firestore
+                const newReceiptRef = doc(receiptsRef);
+                await setDoc(newReceiptRef, receipt);
+                
+                // Aggregate cart items, unpacking bundles into individual component deductions
+                const stockDeductions = {};
+
+                cart.forEach(cartItem => {
+                    const localItem = inventoryData.find(i => i.sku === cartItem.sku);
+                    
+                    if (localItem && localItem.isBundle && localItem.components) {
+                        // If it's a bundle, loop through its components and deduct those
+                        localItem.components.forEach(comp => {
+                            stockDeductions[comp.sku] = (stockDeductions[comp.sku] || 0) + (comp.qty || 1);
+                        });
+                    } else {
+                        // Standard item deduction
+                        stockDeductions[cartItem.sku] = (stockDeductions[cartItem.sku] || 0) + 1;
+                    }
+                });
+
+                // Update Firestore floor quantities for each physical SKU sold
+                for (const sku in stockDeductions) {
+                    try {
+                        const count = stockDeductions[sku];
+                        await updateDoc(doc(inventoryRef, sku), {
+                            floorStock: increment(-count)
+                        });
+                        
+                        // Update local memory cache so POS doesn't need to refresh
+                        const targetItem = inventoryData.find(i => i.sku === sku);
+                        if (targetItem && typeof targetItem.floorStock !== 'undefined') {
+                            targetItem.floorStock -= count;
+                        }
+                    } catch (err) {
+                        console.error(`Error updating stock for ${sku}`, err);
+                    }
+                }
+
+                finalSound.play();
+                
+                // Populate Print Layout
+                const printContainer = document.getElementById('print-receipt');
+                
+                let itemsHtml = '';
+                receipt.items.forEach(item => {
+                    itemsHtml += `<div style="display:flex; justify-content:space-between;">
+                        <span>${item.name}</span>
+                        <span>${formatMoney(item.price)}</span>
+                    </div>`;
+                });
+
+                let paymentsHtml = '';
+                receipt.payments.forEach(p => {
+                    paymentsHtml += `<div style="display:flex; justify-content:space-between;">
+                        <span>${p.method} ${p.meta || ''}</span>
+                        <span>${formatMoney(p.amount)}</span>
+                    </div>`;
+                });
+
+                printContainer.innerHTML = `
+                    <div style="text-align:center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px;">
+                        <h2 style="margin:0; font-size:18px;">Chaotic Commissary</h2>
+                        <p style="margin:0; font-size:12px;">Have a wonderful day!</p>
+                    </div>
+                    <div style="margin-bottom: 10px; font-size:12px;">
+                        <div style="display:flex; justify-content:space-between;"><span>Date:</span> <span>${new Date().toLocaleString()}</span></div>
+                        <div style="display:flex; justify-content:space-between;"><strong>Cashier:</strong> <strong>${receipt.cashierName}</strong></div>
+                        <div style="display:flex; justify-content:space-between;"><strong>Receipt ID:</strong> <strong>${newReceiptRef.id}</strong></div>
+                    </div>
+                    <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 10px 0; margin-bottom: 10px; font-size:12px;">
+                        ${itemsHtml}
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:14px; margin-bottom: 10px;">
+                        <span>TOTAL:</span>
+                        <span>${formatMoney(receipt.total)}</span>
+                    </div>
+                    <div style="font-size:12px; margin-bottom:20px;">
+                        ${paymentsHtml}
+                    </div>
+                    <div style="text-align:center; margin-bottom: 10px;">
+                        <svg id="barcode"></svg>
+                    </div>
+                    <div style="text-align:center; font-size:10px;">
+                        * * * END OF RECEIPT * * *
+                    </div>
+                `;
+
+                // Generate Barcode using JsBarcode
+                JsBarcode("#barcode", newReceiptRef.id, {
+                    format: "CODE128",
+                    width: 1.1,
+                    height: 40,
+                    displayValue: false,
+                    margin: 0
+                });
+
+                // Trigger print dialog
+                window.print();
+                
+                // Clear cart and return
+                cart = [];
+                switchScreen('register');
+            } catch (e) {
+                console.error("Failed to save receipt", e);
+                showToast("Error saving transaction", true);
+            }
+        }
+
+        function renderInventoryList() {
+            const tbody = document.getElementById('inventory-list');
+            tbody.innerHTML = '';
+            
+            inventoryData.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                tr.className = `border-b border-slate-700 ${index === inventorySelectedIndex ? 'selected-row' : 'text-slate-300'}`;
+                tr.innerHTML = `
+                    <td class="p-4 w-1/4">${item.sku}</td>
+                    <td class="p-4 w-1/2">${item.name}</td>
+                    <td class="p-4 w-1/4 text-right">${formatMoney(item.price)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Ensure selected item is scrolled into view
+            const selectedEl = tbody.children[inventorySelectedIndex];
+            if (selectedEl) selectedEl.scrollIntoView({ block: 'nearest' });
+        }
+
+        function handleInventoryInput(e) {
+            // If overlay is open, handle form inputs
+            if (invFormMode !== null) {
+                if (e.key === 'Escape') {
+                    closeInventoryForm();
+                } else if (e.key === 'Enter') {
+                    // Prevent default form submission if any
+                    e.preventDefault();
+                    saveInventoryItem();
+                }
+                return; // Stop processing list navigation keys
+            }
+
+            // Navigation
+            if (e.key === 'ArrowDown') {
+                if (inventorySelectedIndex < inventoryData.length - 1) {
+                    inventorySelectedIndex++;
+                    renderInventoryList();
+                }
+            } else if (e.key === 'ArrowUp') {
+                if (inventorySelectedIndex > 0) {
+                    inventorySelectedIndex--;
+                    renderInventoryList();
+                }
+            } else if (e.key === 'Escape') {
+                switchScreen('register');
+            } else if (e.key.toLowerCase() === 'n') {
+                openInventoryForm('add');
+            } else if (e.key.toLowerCase() === 'e') {
+                if (inventoryData.length > 0) openInventoryForm('edit', inventoryData[inventorySelectedIndex]);
+            } else if (e.key === 'Delete') {
+                if (inventoryData.length > 0) deleteInventoryItem(inventoryData[inventorySelectedIndex]);
+            }
+        }
+
+        function openInventoryForm(mode, item = null) {
+            invFormMode = mode;
+            document.getElementById('inventory-form-overlay').classList.remove('hidden');
+            
+            const skuInput = document.getElementById('inv-sku');
+            const nameInput = document.getElementById('inv-name');
+            const priceInput = document.getElementById('inv-price');
+            
+            document.getElementById('inv-form-title').textContent = mode === 'add' ? 'ADD ITEM' : 'EDIT ITEM';
+            
+            if (mode === 'edit' && item) {
+                skuInput.value = item.sku;
+                skuInput.disabled = true; // Cannot edit SKU once created in this basic version
+                skuInput.classList.add('opacity-50');
+                nameInput.value = item.name;
+                priceInput.value = item.price;
+                setTimeout(() => nameInput.focus(), 10);
+            } else {
+                skuInput.value = '';
+                skuInput.disabled = false;
+                skuInput.classList.remove('opacity-50');
+                nameInput.value = '';
+                priceInput.value = '';
+                setTimeout(() => skuInput.focus(), 10);
+            }
+        }
+
+        function closeInventoryForm() {
+            invFormMode = null;
+            document.getElementById('inventory-form-overlay').classList.add('hidden');
+            renderInventoryList(); // restore focus visually
+        }
+
+        async function saveInventoryItem() {
+            const sku = document.getElementById('inv-sku').value.trim();
+            const name = document.getElementById('inv-name').value.trim();
+            const price = parseFloat(document.getElementById('inv-price').value);
+
+            if (!sku || !name || isNaN(price)) {
+                showToast("Invalid inputs", true);
+                return;
+            }
+
+            const itemData = { sku, name, price };
+            
+            try {
+                await setDoc(doc(inventoryRef, sku), itemData);
+                
+                // Update local state
+                if (invFormMode === 'add') {
+                    inventoryData.push({ id: sku, ...itemData });
+                    inventorySelectedIndex = inventoryData.length - 1; // select new item
+                } else {
+                    const idx = inventoryData.findIndex(i => i.sku === sku);
+                    if (idx > -1) inventoryData[idx] = { id: sku, ...itemData };
+                }
+                
+                showToast("Item saved");
+                closeInventoryForm();
+            } catch (e) {
+                console.error("Save error", e);
+                showToast("Failed to save", true);
+            }
+        }
+
+        async function deleteInventoryItem(item) {
+            // Normally would use confirm(), but rules say strictly no alerts/confirms. 
+            // We will do direct delete with toast.
+            try {
+                await deleteDoc(doc(inventoryRef, item.sku));
+                inventoryData = inventoryData.filter(i => i.sku !== item.sku);
+                if (inventorySelectedIndex >= inventoryData.length) {
+                    inventorySelectedIndex = Math.max(0, inventoryData.length - 1);
+                }
+                renderInventoryList();
+                showToast(`Deleted ${item.name}`);
+            } catch (e) {
+                console.error("Delete error", e);
+                showToast("Failed to delete", true);
+            }
+        }
+
+        // Boot
+        window.addEventListener('DOMContentLoaded', initApp);
+
+    </script>
+</body>
+</html>
