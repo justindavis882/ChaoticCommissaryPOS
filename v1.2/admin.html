@@ -133,7 +133,7 @@
         </nav>
 
         <div class="p-4 border-t border-slate-800 text-xs text-slate-500 text-center">
-            System Admin v1.1
+            System v1.2
         </div>
         <button class="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white py-2 px-4 rounded-lg transition-colors" onclick="window.location.href='index.html'">Go Back</button>
     </aside>
@@ -423,8 +423,9 @@
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Report Type</label>
                             <select id="report-type" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                                <option value="eod">End of Day (Z-Report) & Drawer Reconcile</option>
                                 <option value="reorder">Reorder Stock Projections</option>
-                                <!-- Future reports go here -->
+                                <option value="hourly">Hourly Sales Velocity</option>
                             </select>
                         </div>
                         <div>
@@ -1600,6 +1601,10 @@
 
             if (type === 'reorder') {
                 generateReorderReport(startDate, endDate, diffDays);
+            } else if (type === 'eod') {
+                generateEODReport(startDate, endDate);
+            } else if (type === 'hourly') {
+                generateHourlyReport(startDate, endDate);
             }
         };
 
@@ -1699,6 +1704,228 @@
             `;
 
             // Strip the hidden class temporarily to allow print driver to read it, then open print dialog
+            printArea.classList.remove('hidden');
+            window.print();
+            printArea.classList.add('hidden');
+        }
+
+        function generateEODReport(startDate, endDate) {
+            let grossSales = 0;
+            let totalReturns = 0;
+            let transactionCount = 0;
+            
+            const tenders = {
+                CASH: 0,
+                CREDIT: 0,
+                CHECK: 0,
+                REFUND: 0
+            };
+
+            // 1. Process all transactions in the time block
+            state.receipts.forEach(r => {
+                if (!r.timestamp) return;
+                const rDate = new Date(r.timestamp.seconds * 1000);
+                
+                if (rDate >= startDate && rDate <= endDate) {
+                    transactionCount++;
+                    
+                    if (r.type === 'return') {
+                        totalReturns += (r.total || 0);
+                    } else {
+                        grossSales += (r.total || 0);
+                    }
+
+                    // Bucket the payments
+                    (r.payments || []).forEach(p => {
+                        const method = p.method === 'CREDIT' || p.method === 'DEBIT' ? 'CREDIT' : p.method;
+                        if (tenders[method] !== undefined) {
+                            tenders[method] += p.amount;
+                        } else {
+                            tenders[method] = p.amount; // Catch-all for unexpected tender names
+                        }
+                    });
+                }
+            });
+
+            const netSales = grossSales - totalReturns;
+
+            // 2. Inject into Print Area
+            const printArea = document.getElementById('print-report-area');
+            
+            printArea.innerHTML = `
+                <div style="font-family: sans-serif; padding: 40px; color: #0f172a; max-width: 800px; margin: 0 auto;">
+                    <!-- Z-REPORT HEADER -->
+                    <div style="text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 20px; margin-bottom: 30px;">
+                        <h1 style="margin: 0 0 10px 0; font-size: 28px; text-transform: uppercase; letter-spacing: 1px;">End of Day Z-Report</h1>
+                        <p style="margin: 0; color: #475569; font-size: 14px;"><strong>Reporting Period:</strong> ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}</p>
+                        <p style="margin: 5px 0 0 0; color: #475569; font-size: 14px;"><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+                    </div>
+                    
+                    <div style="display: flex; gap: 40px; margin-bottom: 40px;">
+                        <!-- SALES SUMMARY -->
+                        <div style="flex: 1;">
+                            <h2 style="font-size: 18px; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 16px;">Sales Summary</h2>
+                            <table style="width: 100%; border-collapse: collapse; font-size: 16px;">
+                                <tr><td style="padding: 6px 0;">Gross Sales</td><td style="text-align: right;">${formatMoney(grossSales)}</td></tr>
+                                <tr><td style="padding: 6px 0; color: #dc2626;">Total Refunds</td><td style="text-align: right; color: #dc2626;">-${formatMoney(totalReturns)}</td></tr>
+                                <tr><td style="padding: 6px 0; font-weight: bold; border-top: 1px solid #e2e8f0;">Net Sales</td><td style="text-align: right; font-weight: bold; border-top: 1px solid #e2e8f0; font-size: 18px;">${formatMoney(netSales)}</td></tr>
+                                <tr><td style="padding: 6px 0; margin-top: 10px; font-size: 14px; color: #64748b;">Total Transactions</td><td style="text-align: right; font-size: 14px; color: #64748b;">${transactionCount}</td></tr>
+                            </table>
+                        </div>
+
+                        <!-- TENDER BREAKDOWN -->
+                        <div style="flex: 1;">
+                            <h2 style="font-size: 18px; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 16px;">Tender Breakdown</h2>
+                            <table style="width: 100%; border-collapse: collapse; font-size: 16px;">
+                                <tr><td style="padding: 6px 0;">Cash</td><td style="text-align: right; font-weight: bold;">${formatMoney(tenders.CASH)}</td></tr>
+                                <tr><td style="padding: 6px 0;">Credit / Debit</td><td style="text-align: right;">${formatMoney(tenders.CREDIT)}</td></tr>
+                                <tr><td style="padding: 6px 0;">Check</td><td style="text-align: right;">${formatMoney(tenders.CHECK)}</td></tr>
+                                <tr><td style="padding: 6px 0; color: #dc2626;">Refunds Issued</td><td style="text-align: right; color: #dc2626;">${formatMoney(tenders.REFUND)}</td></tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- DRAWER RECONCILIATION FORM -->
+                    <div style="border: 2px solid #0f172a; border-radius: 8px; padding: 24px; margin-top: 40px; background-color: #f8fafc;">
+                        <h2 style="font-size: 20px; text-transform: uppercase; text-align: center; margin: 0 0 20px 0;">Till Reconciliation Worksheet</h2>
+                        
+                        <div style="display: flex; gap: 40px;">
+                            <!-- Coin & Bill Counter -->
+                            <div style="flex: 1; font-family: monospace; font-size: 16px; line-height: 2;">
+                                <div style="display: flex; justify-content: space-between;"><span>Pennies ($0.01)</span> <span>x ____ = $_______</span></div>
+                                <div style="display: flex; justify-content: space-between;"><span>Nickels ($0.05)</span> <span>x ____ = $_______</span></div>
+                                <div style="display: flex; justify-content: space-between;"><span>Dimes   ($0.10)</span> <span>x ____ = $_______</span></div>
+                                <div style="display: flex; justify-content: space-between;"><span>Quarters($0.25)</span> <span>x ____ = $_______</span></div>
+                                <div style="display: flex; justify-content: space-between;"><span>Ones    ($1.00)</span> <span>x ____ = $_______</span></div>
+                                <div style="display: flex; justify-content: space-between;"><span>Fives   ($5.00)</span> <span>x ____ = $_______</span></div>
+                                <div style="display: flex; justify-content: space-between;"><span>Tens   ($10.00)</span> <span>x ____ = $_______</span></div>
+                                <div style="display: flex; justify-content: space-between;"><span>Twenties($20.0)</span> <span>x ____ = $_______</span></div>
+                                <div style="display: flex; justify-content: space-between;"><span>Fifties($50.00)</span> <span>x ____ = $_______</span></div>
+                                <div style="display: flex; justify-content: space-between;"><span>Hundreds($100.)</span> <span>x ____ = $_______</span></div>
+                            </div>
+                            
+                            <!-- Math & Sign-off -->
+                            <div style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; font-size: 16px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 12px; font-weight: bold;">
+                                    <span>Total Counted Cash:</span> <span>$_____________</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                                    <span>Minus Starting Bank:</span> <span>-$_____________</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid #94a3b8; padding-bottom: 12px;">
+                                    <span>Expected Cash Sales:</span> <span>-$<u style="text-decoration: none;">&nbsp;${(tenders.CASH - tenders.REFUND).toFixed(2)}&nbsp;</u></span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 40px; font-size: 20px; font-weight: bold;">
+                                    <span>Over / (Short):</span> <span>$_____________</span>
+                                </div>
+                                
+                                <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                                    <span style="font-size: 14px;">Manager Signature:</span>
+                                    <div style="border-bottom: 1px solid #0f172a; width: 200px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Print
+            printArea.classList.remove('hidden');
+            window.print();
+            printArea.classList.add('hidden');
+        }
+
+        function generateHourlyReport(startDate, endDate) {
+            // Array to hold 24 buckets (0-23 hours)
+            const hourlyData = Array.from({ length: 24 }, () => ({ count: 0, sales: 0, returns: 0 }));
+            let totalTransactions = 0;
+            let totalNetSales = 0;
+
+            // 1. Bucket transactions by hour
+            state.receipts.forEach(r => {
+                if (!r.timestamp) return;
+                const rDate = new Date(r.timestamp.seconds * 1000);
+                
+                if (rDate >= startDate && rDate <= endDate) {
+                    const hour = rDate.getHours();
+                    
+                    if (r.type === 'return') {
+                        hourlyData[hour].returns += (r.total || 0);
+                        totalNetSales -= (r.total || 0);
+                    } else {
+                        hourlyData[hour].count += 1;
+                        hourlyData[hour].sales += (r.total || 0);
+                        totalTransactions += 1;
+                        totalNetSales += (r.total || 0);
+                    }
+                }
+            });
+
+            // 2. Format rows (skipping empty hours)
+            const reportRows = [];
+            hourlyData.forEach((data, index) => {
+                if (data.count === 0 && data.returns === 0) return; // Skip dead hours
+                
+                const ampm = index >= 12 ? 'PM' : 'AM';
+                const displayHour = index % 12 === 0 ? 12 : index % 12;
+                const timeStr = `${displayHour}:00 ${ampm} - ${displayHour}:59 ${ampm}`;
+                const netHour = data.sales - data.returns;
+
+                reportRows.push(`
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                        <td style="padding: 12px; font-weight: 600; color: #334155;">${timeStr}</td>
+                        <td style="padding: 12px; text-align: center;">${data.count}</td>
+                        <td style="padding: 12px; text-align: right; color: #dc2626;">${data.returns > 0 ? '-' + formatMoney(data.returns) : '$0.00'}</td>
+                        <td style="padding: 12px; text-align: right; font-weight: bold;">${formatMoney(netHour)}</td>
+                    </tr>
+                `);
+            });
+
+            const printArea = document.getElementById('print-report-area');
+            
+            let rowsHtml = reportRows.join('');
+            if (reportRows.length === 0) {
+                rowsHtml = `<tr><td colspan="4" style="padding: 30px; text-align: center; color: #64748b;">No transactions found in this date range.</td></tr>`;
+            }
+
+            // 3. Inject into Print Area
+            printArea.innerHTML = `
+                <div style="font-family: sans-serif; padding: 40px; color: #0f172a; max-width: 800px; margin: 0 auto;">
+                    <div style="text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 20px; margin-bottom: 30px;">
+                        <h1 style="margin: 0 0 10px 0; font-size: 28px; text-transform: uppercase; letter-spacing: 1px;">Hourly Sales Velocity</h1>
+                        <p style="margin: 0; color: #475569; font-size: 14px;"><strong>Reporting Period:</strong> ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}</p>
+                        <p style="margin: 5px 0 0 0; color: #475569; font-size: 14px;"><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; background-color: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 30px;">
+                        <div style="text-align: center; flex: 1;">
+                            <div style="font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: bold;">Total Transactions</div>
+                            <div style="font-size: 24px; font-weight: bold; color: #0f172a;">${totalTransactions}</div>
+                        </div>
+                        <div style="border-left: 1px solid #cbd5e1; flex: 0;"></div>
+                        <div style="text-align: center; flex: 1;">
+                            <div style="font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: bold;">Net Revenue</div>
+                            <div style="font-size: 24px; font-weight: bold; color: #16a34a;">${formatMoney(totalNetSales)}</div>
+                        </div>
+                    </div>
+
+                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
+                        <thead>
+                            <tr style="background-color: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
+                                <th style="padding: 12px;">Time Block</th>
+                                <th style="padding: 12px; text-align: center;">Transactions</th>
+                                <th style="padding: 12px; text-align: right;">Refunds</th>
+                                <th style="padding: 12px; text-align: right;">Net Sales</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHtml}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            // Print
             printArea.classList.remove('hidden');
             window.print();
             printArea.classList.add('hidden');
