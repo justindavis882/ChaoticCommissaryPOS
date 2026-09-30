@@ -3,39 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>POS System</title>
-    <link rel="icon" type="image/png" href="logo.png">
-    <link rel="apple-touch-icon" href="logo.png">
+    <title>Chaotic Commissary | Gateway</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
+        
         body {
             font-family: 'JetBrains Mono', monospace;
-            background-color: #0f172a;
+            background-color: #0f172a; /* tailwind slate-900 */
             color: #e2e8f0;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+            overflow: hidden;
         }
 
-        button {
-            background-color: #1e293b;
-            color: #e2e8f0;
-            border: 2px solid #334155;
-            padding: 10px 20px;
-            font-family: 'JetBrains Mono', monospace;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background-color: #334155;
+        /* Large background logo positioning */
+        .bg-logo {
+            position: absolute;
+            bottom: -5%;
+            right: -5%;
+            width: 1000px;
+            height: 1000px;
+            background-image: url('logo.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: bottom right;
+            opacity: 0.15; /* Keeps it subtle so it doesn't overpower the screen */
+            z-index: -1;
+            pointer-events: none;
         }
     </style>
 </head>
-<body>
-    <h1>POS System</h1>
-    <p>Please select an option to proceed.</p>
+<body class="relative h-screen w-screen">
 
-    <button onclick="window.location.href='pos.html'">Register Sale</button>
-    <button onclick="window.location.href='admin.html'">Admin Panel</button>
-    <button onclick="window.location.href='printer.html'">Label Printer</button>
+    <!-- Background Logo -->
+    <div class="bg-logo"></div>
+
+    <!-- Top Right Interactive Container -->
+    <div class="absolute top-16 right-16 flex flex-col items-end text-right z-10">
+        
+        <!-- Header Text -->
+        <h1 class="text-5xl font-extrabold text-blue-400 tracking-tight mb-2 uppercase drop-shadow-md">
+            Chaotic Commissary
+        </h1>
+        <p class="text-slate-400 mb-12 text-lg tracking-widest uppercase">
+            System Gateway v1.1
+        </p>
+
+        <!-- Navigation Buttons -->
+        <div class="flex flex-col gap-5 w-72">
+            <button onclick="window.location.href='pos.html'" class="group bg-blue-600 hover:bg-blue-500 text-white py-5 px-6 rounded-xl font-bold text-xl transition-all shadow-xl shadow-blue-900/20 flex justify-between items-center border border-blue-400">
+                Register Sale
+                <span class="transform transition-transform group-hover:translate-x-1">→</span>
+            </button>
+            
+            <button onclick="window.location.href='admin.html'" class="group bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white py-4 px-6 rounded-xl font-bold text-lg transition-all shadow-lg flex justify-between items-center border border-slate-600">
+                Admin Panel
+                <span class="transform transition-transform group-hover:translate-x-1 opacity-50 group-hover:opacity-100">→</span>
+            </button>
+            
+            <button onclick="window.location.href='printer.html'" class="group bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white py-4 px-6 rounded-xl font-bold text-lg transition-all shadow-lg flex justify-between items-center border border-slate-600">
+                Label Printer
+                <span class="transform transition-transform group-hover:translate-x-1 opacity-50 group-hover:opacity-100">→</span>
+            </button>
+        </div>
+        
+    </div>
+
 </body>
 </html>
