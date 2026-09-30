@@ -1,0 +1,1887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9; /* slate-100 */
+            color: #0f172a; /* slate-900 */
+            overflow-x: hidden;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* View Switching */
+        .view-section {
+            display: none;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        .view-section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Toast notification */
+        #toast {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: translateY(100px) translateX(-50%);
+            opacity: 0;
+            pointer-events: none;
+        }
+        #toast.show {
+            transform: translateY(0) translateX(-50%);
+            opacity: 1;
+        }
+
+        /* Print Media Queries */
+        @media print {
+            body * { visibility: hidden !important; }
+            #print-area, #print-area *, #print-id-area, #print-id-area *, #print-report-area, #print-report-area * { visibility: visible !important; }
+            
+            /* Thermal Printers */
+            #print-area, #print-id-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 300px;
+                margin: 0 auto;
+                padding: 10px;
+                background: white;
+                color: black;
+                font-family: monospace;
+            }
+
+            /* Standard Document Printers */
+            #print-report-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                background: white;
+                color: black;
+            }
+
+            #modal-backdrop { background: transparent !important; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col h-full shadow-xl z-10 flex-shrink-0">
+        <div class="p-6 flex items-center gap-3 border-b border-slate-800">
+            <i class="ph-fill ph-storefront text-2xl text-blue-400"></i>
+            <h1 class="text-xl font-bold text-white tracking-wide">POS Admin</h1>
+        </div>
+        
+        <nav class="flex-1 p-4 space-y-2">
+            <button onclick="switchView('inventory')" id="nav-inventory" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors bg-blue-600 text-white font-medium">
+                <i class="ph ph-package text-xl"></i> Inventory & Audit
+            </button>
+            <button onclick="switchView('users')" id="nav-users" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-slate-800 hover:text-white">
+                <i class="ph ph-users text-xl"></i> Employees
+            </button>
+            <button onclick="switchView('receipts')" id="nav-receipts" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-slate-800 hover:text-white">
+                <i class="ph ph-receipt text-xl"></i> Receipts
+            </button>
+            <button onclick="switchView('returns')" id="nav-returns" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-slate-800 hover:text-white">
+                <i class="ph ph-arrow-u-up-left text-xl"></i> Returns
+            </button>
+            <button onclick="switchView('pullsheet')" id="nav-pullsheet" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-slate-800 hover:text-white">
+                <i class="ph ph-truck text-xl"></i> Pull-Sheets
+            </button>
+            <button onclick="switchView('bundles')" id="nav-bundles" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-slate-800 hover:text-white">
+                <i class="ph ph-gift text-xl"></i> Bundle Builder
+            </button>
+            <button onclick="switchView('pricing')" id="nav-pricing" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-slate-800 hover:text-white">
+                <i class="ph ph-tag text-xl"></i> Event Pricing
+            </button>
+            <button onclick="switchView('reports')" id="nav-reports" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-slate-800 hover:text-white">
+                <i class="ph ph-chart-bar text-xl"></i> Analytics & Reports
+            </button>
+        </nav>
+
+        <div class="p-4 border-t border-slate-800 text-xs text-slate-500 text-center">
+            System Admin v1.1
+        </div>
+        <button class="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white py-2 px-4 rounded-lg transition-colors" onclick="window.location.href='index.html'">Go Back</button>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden relative">
+        
+        <!-- Header -->
+        <header class="bg-white border-b border-slate-200 h-16 flex items-center px-8 shadow-sm flex-shrink-0 justify-between">
+            <h2 id="view-title" class="text-xl font-semibold text-slate-800">Inventory Management</h2>
+            <div class="flex items-center gap-2">
+                <span class="relative flex h-3 w-3">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                </span>
+                <span class="text-sm font-medium text-slate-600">System Online</span>
+            </div>
+        </header>
+
+        <!-- Scrollable Views Container -->
+        <div class="flex-1 overflow-y-auto p-8 bg-slate-50">
+            
+            <!-- VIEW: INVENTORY -->
+            <section id="view-inventory" class="view-section active">
+                <div class="flex justify-between items-center mb-6">
+                    <div class="relative w-96">
+                        <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
+                        <input type="text" id="search-inventory" placeholder="Search SKU or Name..." class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="startAudit()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm">
+                            <i class="ph ph-clipboard-text text-lg"></i> Run Audit
+                        </button>
+                        <button onclick="openModal('inventory-modal')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm">
+                            <i class="ph ph-plus-circle text-lg"></i> Add Item
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600">SKU</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600">Name</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600">Price</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600 text-center">Floor</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600 text-center">Backroom</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600">Location</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventory-tbody" class="divide-y divide-slate-200">
+                            <!-- JS Populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VIEW: USERS -->
+            <section id="view-users" class="view-section">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-semibold text-slate-800">Employee Directory</h3>
+                    <button onclick="openModal('user-modal')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm">
+                        <i class="ph ph-plus-circle text-lg"></i> Add Employee
+                    </button>
+                </div>
+                <div id="users-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <!-- Populated via JS -->
+                </div>
+            </section>
+
+            <!-- VIEW: RECEIPTS -->
+            <section id="view-receipts" class="view-section">
+                <div class="flex justify-between items-center mb-6">
+                    <div class="relative w-96">
+                        <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
+                        <input type="text" id="search-receipts" placeholder="Search Receipt ID..." class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600">Receipt ID</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600">Date/Time</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600">Type</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600">Total</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="receipts-tbody" class="divide-y divide-slate-200">
+                            <!-- JS Populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VIEW: RETURNS -->
+            <section id="view-returns" class="view-section">
+                <div class="max-w-4xl mx-auto">
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+                        <h3 class="text-lg font-semibold text-slate-800 mb-4">Process a Return</h3>
+                        <p class="text-slate-500 mb-4 text-sm">Scan the barcode on the receipt or enter the Receipt ID to load the transaction.</p>
+                        
+                        <div class="flex gap-4">
+                            <input type="text" id="return-receipt-id" placeholder="Scan or type Receipt ID..." class="flex-1 px-4 py-3 text-lg border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase font-mono">
+                            <button onclick="loadReceiptForReturn()" class="bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                                Fetch Receipt
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Return Details (Hidden until loaded) -->
+                    <div id="return-details-area" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="p-6 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                            <div>
+                                <h4 class="font-bold text-slate-800">Original Receipt: <span id="ret-orig-id" class="font-mono text-blue-600"></span></h4>
+                                <p class="text-sm text-slate-500" id="ret-orig-date"></p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm text-slate-500">Original Total</p>
+                                <p class="text-xl font-bold text-slate-800" id="ret-orig-total"></p>
+                            </div>
+                        </div>
+
+                        <div class="p-0">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="bg-slate-100 border-b border-slate-200">
+                                    <tr>
+                                        <th class="py-2 px-6 font-semibold text-sm text-slate-600">Return?</th>
+                                        <th class="py-2 px-6 font-semibold text-sm text-slate-600">SKU</th>
+                                        <th class="py-2 px-6 font-semibold text-sm text-slate-600">Item</th>
+                                        <th class="py-2 px-6 font-semibold text-sm text-slate-600 text-right">Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="return-items-tbody" class="divide-y divide-slate-100">
+                                    <!-- Populated via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="p-6 border-t border-slate-200 bg-slate-50 flex flex-col items-end gap-4">
+                            <div class="flex items-center gap-4 text-lg">
+                                <span class="font-medium text-slate-600">Refund Amount:</span>
+                                <span class="text-2xl font-bold text-red-500" id="return-refund-total">$0.00</span>
+                            </div>
+                            <button onclick="processReturnTransaction()" class="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg font-bold shadow-sm transition-colors text-lg">
+                                Issue Refund & Print
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: PULL-SHEETS -->
+            <section id="view-pullsheet" class="view-section">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-800">Runner Restock List</h3>
+                        <p class="text-slate-500 text-sm">Items with low floor stock (10 or fewer) that have backroom availability.</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="renderPullSheet()" class="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm">
+                            <i class="ph ph-arrows-clockwise text-lg"></i> Refresh List
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600">Location</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600">Item Name</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600 text-center">Floor</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600 text-center">Backroom</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600 text-right">Quick Transfer</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pullsheet-tbody" class="divide-y divide-slate-200">
+                            <!-- JS Populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VIEW: BUNDLES -->
+            <section id="view-bundles" class="view-section">
+                <div class="flex gap-6">
+                    <!-- Left: Bundle Configuration -->
+                    <div class="w-1/2 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                        <h3 class="text-lg font-semibold text-slate-800 mb-4">Create New Bundle</h3>
+                        
+                        <div class="space-y-4 mb-6">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Bundle Name</label>
+                                <input type="text" id="bundle-name" placeholder="e.g. Festival Survival Kit" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Bundle Price ($)</label>
+                                <input type="number" id="bundle-price" step="0.01" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                        </div>
+
+                        <h4 class="font-medium text-slate-700 mb-2 border-b border-slate-200 pb-2">Included Items</h4>
+                        <div id="bundle-draft-list" class="space-y-2 mb-6 min-h-[100px]">
+                            <!-- JS Populated: Items added to bundle -->
+                            <div class="text-sm text-slate-400 italic">No items added yet.</div>
+                        </div>
+
+                        <button onclick="saveBundle()" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-bold transition-colors">
+                            Generate SKU & Save Bundle
+                        </button>
+                    </div>
+
+                    <!-- Right: Inventory Picker -->
+                    <div class="w-1/2 bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col h-[600px]">
+                        <h3 class="text-lg font-semibold text-slate-800 mb-4">Select Components</h3>
+                        <div class="relative mb-4">
+                            <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
+                            <input type="text" id="bundle-search" placeholder="Search inventory..." class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div class="flex-1 overflow-y-auto border border-slate-200 rounded-lg">
+                            <table class="w-full text-left border-collapse">
+                                <tbody id="bundle-inventory-list" class="divide-y divide-slate-100">
+                                    <!-- JS Populated -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: PRICING -->
+            <section id="view-pricing" class="view-section">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6 flex flex-wrap gap-4 items-end">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Adjustment Type</label>
+                        <select id="price-mod-type" class="w-48 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="flat">Flat Amount ($)</option>
+                            <option value="percent">Percentage (%)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Value (+ for markup, - for discount)</label>
+                        <input type="number" id="price-mod-value" step="0.01" placeholder="e.g. -2.00 or 15" class="w-64 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div class="flex gap-2 ml-auto">
+                        <button onclick="clearPricingModifiers()" class="bg-slate-200 hover:bg-slate-300 text-slate-800 px-6 py-2 rounded-lg font-medium transition-colors">
+                            Reset Selected to Base Price
+                        </button>
+                        <button onclick="applyPricingModifiers()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold transition-colors shadow-sm">
+                            Apply Modifier
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="py-3 px-4 w-12 text-center">
+                                    <input type="checkbox" id="selectAllPricing" class="w-4 h-4 rounded border-slate-300" onchange="toggleAllPricing(this)">
+                                </th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600">SKU / Item</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600">Base Price</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600">Active Modifier</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600 text-right">Register Price</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pricing-tbody" class="divide-y divide-slate-200">
+                            <!-- JS Populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VIEW: REPORTS -->
+            <section id="view-reports" class="view-section">
+                <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 class="text-lg font-semibold text-slate-800 mb-6">Generate Report</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Report Type</label>
+                            <select id="report-type" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                                <option value="reorder">Reorder Stock Projections</option>
+                                <!-- Future reports go here -->
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Sales Data Start Date</label>
+                            <input type="date" id="report-start" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Sales Data End Date</label>
+                            <input type="date" id="report-end" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end border-t border-slate-100 pt-6">
+                        <button onclick="runReport()" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-bold shadow-sm transition-colors flex items-center gap-2">
+                            <i class="ph ph-printer text-xl"></i> Generate & Print
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Full Page Report Print Area (Hidden in browser UI) -->
+            <div id="print-report-area" class="hidden no-print"></div>
+
+        </div>
+
+        <!-- AUDIT WIZARD FULLSCREEN OVERLAY -->
+        <div id="audit-wizard" class="absolute inset-0 bg-slate-100 z-30 hidden flex-col">
+            <header class="bg-slate-900 text-white p-4 flex justify-between items-center shadow-md flex-shrink-0">
+                <div>
+                    <h2 class="text-xl font-bold">Inventory Audit Workflow</h2>
+                    <p class="text-sm text-slate-400" id="audit-subtitle">Step 1: Sales Floor</p>
+                </div>
+                <button onclick="cancelAudit()" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded">
+                    <i class="ph ph-x text-xl"></i> Cancel Audit
+                </button>
+            </header>
+            
+            <div class="flex-1 overflow-hidden flex">
+                <!-- Scan Area (Left) -->
+                <div class="w-1/3 bg-white border-r border-slate-200 p-6 flex flex-col" id="audit-scan-area">
+                    <h3 class="text-lg font-bold text-slate-800 mb-2" id="audit-scan-title">Scan Floor Items</h3>
+                    <p class="text-sm text-slate-500 mb-6">Use the barcode scanner or type the SKU and press Enter.</p>
+                    <input type="text" id="audit-scanner-input" class="w-full px-4 py-3 text-2xl border-2 border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 uppercase font-mono mb-4 text-center tracking-widest shadow-inner" placeholder="SCAN BARCODE...">
+                    
+                    <div class="mt-auto pt-6 border-t border-slate-200">
+                        <button id="audit-next-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-bold text-lg shadow-md transition-colors flex justify-center items-center gap-2">
+                            Proceed to Next Step <i class="ph ph-arrow-right text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Review / List Area (Right) -->
+                <div class="flex-1 p-0 overflow-y-auto bg-slate-50 relative" id="audit-list-area">
+                    <table class="w-full text-left border-collapse bg-white shadow-sm m-6 w-[calc(100%-3rem)] rounded-xl overflow-hidden">
+                        <thead class="bg-slate-100 border-b border-slate-200" id="audit-table-head">
+                            <!-- dynamic -->
+                        </thead>
+                        <tbody id="audit-tbody" class="divide-y divide-slate-100">
+                            <!-- dynamic -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- MODALS & OVERLAYS -->
+    
+    <!-- Shared Modal Backdrop -->
+    <div id="modal-backdrop" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 hidden flex items-center justify-center">
+        
+        <!-- Inventory Modal -->
+        <div id="inventory-modal" class="modal-content hidden bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-fadeIn">
+            <div class="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                <h3 id="inv-modal-title" class="font-bold text-lg text-slate-800">Add Inventory Item</h3>
+                <button onclick="closeModals()" class="text-slate-400 hover:text-slate-600"><i class="ph ph-x text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">SKU / Barcode</label>
+                    <input type="text" id="inv-form-sku" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none uppercase font-mono">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Item Name</label>
+                    <input type="text" id="inv-form-name" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Price ($)</label>
+                        <input type="number" step="0.01" id="inv-form-price" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-right">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Backroom Location</label>
+                        <input type="text" id="inv-form-location" placeholder="e.g. VAN - TOTE4" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none uppercase">
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Floor Stock</label>
+                        <input type="number" id="inv-form-floor" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-right">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Backroom Stock</label>
+                        <input type="number" id="inv-form-backroom" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-right">
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
+                <button onclick="closeModals()" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors">Cancel</button>
+                <button onclick="saveInventory()" class="px-4 py-2 bg-blue-600 text-white font-medium hover:bg-blue-700 rounded-lg transition-colors">Save Item</button>
+            </div>
+        </div>
+
+        <!-- User Modal -->
+        <div id="user-modal" class="modal-content hidden bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-fadeIn">
+            <div class="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                <h3 id="user-modal-title" class="font-bold text-lg text-slate-800">Add Employee</h3>
+                <button onclick="closeModals()" class="text-slate-400 hover:text-slate-600"><i class="ph ph-x text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="hidden" id="user-form-id">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                    <input type="text" id="user-form-name" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Department</label>
+                    <select id="user-form-dept" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="Cashier">Cashier</option>
+                        <option value="Stocker">Stocker</option>
+                        <option value="Manager">Manager</option>
+                        <option value="Admin">Admin</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">System PIN (Numbers only)</label>
+                    <input type="password" id="user-form-pin" maxlength="8" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none tracking-widest text-center text-xl font-mono">
+                </div>
+            </div>
+            <div class="p-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
+                <button onclick="closeModals()" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors">Cancel</button>
+                <button onclick="saveUser()" class="px-4 py-2 bg-blue-600 text-white font-medium hover:bg-blue-700 rounded-lg transition-colors">Save Employee</button>
+            </div>
+        </div>
+
+        <!-- ID Print Modal -->
+        <div id="id-modal" class="modal-content hidden bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-fadeIn">
+            <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 no-print">
+                <h3 class="font-bold text-lg text-slate-800">Employee ID Card</h3>
+                <div class="flex gap-2">
+                    <button onclick="window.print()" class="text-blue-600 hover:bg-blue-100 p-2 rounded transition-colors" title="Print"><i class="ph ph-printer text-xl"></i></button>
+                    <button onclick="closeModals()" class="text-slate-400 hover:text-slate-600 p-2"><i class="ph ph-x text-xl"></i></button>
+                </div>
+            </div>
+            
+            <!-- Exact Print Area -->
+            <div id="print-id-area" class="p-6">
+                <div class="text-center border-b border-dashed border-slate-400 pb-4 mb-4">
+                    <h2 class="text-xl font-bold uppercase mb-1">Employee Access</h2>
+                    <p class="text-sm opacity-75">Chaotic Commissary</p>
+                </div>
+                
+                <div class="mb-6 text-center">
+                    <div id="id-name" class="text-2xl font-bold mb-1"></div>
+                    <div id="id-dept" class="text-sm uppercase tracking-widest font-bold"></div>
+                </div>
+                
+                <div class="text-center mb-6">
+                    <svg id="id-barcode"></svg>
+                </div>
+                
+                <div class="text-center font-mono text-xs text-slate-500 border-t border-dashed border-slate-400 pt-4">
+                    <span id="id-date"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Receipt Print Modal -->
+        <div id="receipt-modal" class="modal-content hidden bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-fadeIn">
+            <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 no-print">
+                <h3 class="font-bold text-lg text-slate-800">Receipt Details</h3>
+                <div class="flex gap-2">
+                    <button onclick="window.print()" class="text-blue-600 hover:bg-blue-100 p-2 rounded transition-colors" title="Print"><i class="ph ph-printer text-xl"></i></button>
+                    <button onclick="closeModals()" class="text-slate-400 hover:text-slate-600 p-2"><i class="ph ph-x text-xl"></i></button>
+                </div>
+            </div>
+            
+            <!-- Exact Print Area -->
+            <div id="print-area" class="p-6">
+                <div class="text-center border-b border-dashed border-slate-400 pb-4 mb-4">
+                    <img src="receiptLogo.png" alt="Logo" class="w-40 mx-auto mb-3 grayscale contrast-125">
+                    <p class="text-sm opacity-75">Thank you for your purchase!</p>
+                </div>
+                
+                <div class="mb-4 text-sm font-mono flex flex-col gap-1">
+                    <div class="flex justify-between"><span>Date:</span> <span id="print-date"></span></div>
+                    <div class="flex justify-between"><span>Order:</span> <span id="print-id" class="text-xs"></span></div>
+                    <div class="flex justify-between"><span>Type:</span> <span id="print-type" class="font-bold"></span></div>
+                </div>
+
+                <div id="print-items" class="border-y border-dashed border-slate-400 py-4 mb-4 text-sm font-mono space-y-2">
+                    <!-- JS populated items -->
+                </div>
+
+                <div class="flex flex-col gap-1 text-sm font-mono border-b border-dashed border-slate-400 pb-4 mb-4">
+                    <div class="flex justify-between font-bold text-lg">
+                        <span>TOTAL:</span>
+                        <span id="print-total"></span>
+                    </div>
+                </div>
+
+                <div id="print-payments" class="text-sm font-mono text-slate-600 space-y-1 mb-8">
+                    <!-- JS populated payments -->
+                </div>
+                
+                <div class="text-center font-mono text-xs opacity-60">
+                    * * * END OF RECEIPT * * *
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Global Toast Notification -->
+    <div id="toast" class="fixed bottom-6 left-1/2 bg-slate-800 text-white px-6 py-3 rounded-xl shadow-2xl font-medium z-50 flex items-center gap-3 border border-slate-700">
+        <i id="toast-icon" class="ph ph-info text-xl"></i>
+        <span id="toast-msg">Message</span>
+    </div>
+
+    <!-- Firebase SDK Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, getDocs, setDoc, deleteDoc, getDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Environment variables
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-pos-app';
+        const firebaseConfig = {
+            apiKey: "AIzaSyDuFg74Dvh8FydVdnvKlhShWTHq7SZASC0",
+            authDomain: "chaotic-commissary.firebaseapp.com",
+            projectId: "chaotic-commissary",
+            storageBucket: "chaotic-commissary.firebasestorage.app",
+            messagingSenderId: "282428310882",
+            appId: "1:282428310882:web:226ebc367cc69c296cd83b",
+            measurementId: "G-9S32HHN1Y2"
+        };
+        const customAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Strict Paths
+        const inventoryRef = collection(db, 'artifacts', appId, 'public', 'data', 'inventory');
+        const accountsRef = collection(db, 'artifacts', appId, 'public', 'data', 'accounts');
+        const receiptsRef = collection(db, 'artifacts', appId, 'public', 'data', 'receipts');
+
+        // App State
+        let state = {
+            inventory: [],
+            users: [],
+            receipts: [],
+            currentReturnReceipt: null,
+            returnSelections: new Set(),
+            audit: {
+                active: false,
+                step: 1, // 1: floor, 2: storage, 3: review
+                floorCounts: {},
+                storageCounts: {}
+            },
+            bundleDraft: []
+        };
+
+        // Utility: Toast
+        window.showToast = (message, type = 'info') => {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toast-icon');
+            document.getElementById('toast-msg').textContent = message;
+            
+            if(type === 'error') {
+                toast.className = 'fixed bottom-6 left-1/2 bg-red-600 text-white px-6 py-3 rounded-xl shadow-2xl font-medium z-50 flex items-center gap-3';
+                icon.className = 'ph ph-warning-circle text-xl';
+            } else if (type === 'success') {
+                toast.className = 'fixed bottom-6 left-1/2 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-2xl font-medium z-50 flex items-center gap-3';
+                icon.className = 'ph ph-check-circle text-xl';
+            } else {
+                toast.className = 'fixed bottom-6 left-1/2 bg-slate-800 text-white px-6 py-3 rounded-xl shadow-2xl font-medium z-50 flex items-center gap-3';
+                icon.className = 'ph ph-info text-xl';
+            }
+
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        };
+
+        const formatMoney = (amt) => `$${parseFloat(amt).toFixed(2)}`;
+
+        // Init App
+        async function initApp() {
+            try {
+                if (customAuthToken) {
+                    await signInWithCustomToken(auth, customAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                
+                // Fetch initial data based on default view
+                await fetchInventory();
+                window.switchView('inventory'); // force UI update
+                showToast("System connected successfully.", "success");
+
+                // Auto-refresh inventory every 3 minutes (180,000 ms)
+                setInterval(() => {
+                    if (!state.audit.active && document.getElementById('view-inventory').classList.contains('active')) {
+                        fetchInventory();
+                    }
+                }, 180000);
+
+            } catch (error) {
+                console.error("Init Error:", error);
+                showToast("Failed to connect to database.", "error");
+            }
+        }
+
+        // Navigation Logic
+        window.switchView = async (viewId) => {
+            // Update Sidebar UI
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-600', 'text-white');
+                btn.classList.add('hover:bg-slate-800', 'hover:text-white');
+            });
+            const activeBtn = document.getElementById(`nav-${viewId}`);
+            activeBtn.classList.remove('hover:bg-slate-800');
+            activeBtn.classList.add('bg-blue-600', 'text-white');
+
+            // Update Titles
+            const titles = {
+                'inventory': 'Inventory & Audit Management',
+                'users': 'Employee Access Directory',
+                'receipts': 'Transaction Ledger',
+                'returns': 'Process Return / Refund',
+                'pullsheet': 'Backroom Runner Pull-Sheets',
+                'bundles': 'Virtual Bundle Builder',
+                'pricing': 'Quick-Toggle Event Pricing',
+                'reports': 'System Reports & Analytics' // <--- New Title
+            };
+            document.getElementById('view-title').textContent = titles[viewId];
+
+            // Hide all, show target
+            document.querySelectorAll('.view-section').forEach(sec => sec.classList.remove('active'));
+            document.getElementById(`view-${viewId}`).classList.add('active');
+
+            // Fetch data if needed based on view
+            if(viewId === 'inventory' && state.inventory.length === 0) await fetchInventory();
+            if(viewId === 'users' && state.users.length === 0) await fetchUsers();
+            if(viewId === 'receipts' && state.receipts.length === 0) await fetchReceipts();
+            if(viewId === 'pullsheet') {
+                if(state.inventory.length === 0) await fetchInventory();
+                renderPullSheet();
+            }
+            if(viewId === 'pricing') {
+                if(state.inventory.length === 0) await fetchInventory();
+                renderPricingList();
+            }
+        };
+
+        window.openModal = (modalId) => {
+            document.getElementById('modal-backdrop').classList.remove('hidden');
+            document.querySelectorAll('.modal-content').forEach(m => m.classList.add('hidden'));
+            document.getElementById(modalId).classList.remove('hidden');
+            
+            // Focus first input if exists
+            const firstInput = document.getElementById(modalId).querySelector('input');
+            if(firstInput) setTimeout(() => firstInput.focus(), 50);
+        };
+
+        window.closeModals = () => {
+            document.getElementById('modal-backdrop').classList.add('hidden');
+            ['inv-form-sku', 'inv-form-name', 'inv-form-price', 'inv-form-location', 'inv-form-floor', 'inv-form-backroom',
+            'user-form-id', 'user-form-name', 'user-form-pin'].forEach(id => {
+                const el = document.getElementById(id);
+                if(el) el.value = '';
+            });
+            document.getElementById('inv-form-sku').disabled = false;
+        };
+
+
+        // --- INVENTORY LOGIC ---
+        async function fetchInventory() {
+            try {
+                const snapshot = await getDocs(inventoryRef);
+                state.inventory = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    state.inventory.push({ id: doc.id, stock: 0, ...data });
+                });
+                
+                // Ensure UI updates seamlessly by retaining the current search filter
+                const searchInput = document.getElementById('search-inventory');
+                renderInventory(searchInput ? searchInput.value : '');
+            } catch (e) {
+                showToast("Failed to fetch inventory", "error");
+            }
+        }
+
+        function renderInventory(filterStr = '') {
+            const tbody = document.getElementById('inventory-tbody');
+            tbody.innerHTML = '';
+            
+            const filtered = state.inventory.filter(i => 
+                i.sku.toLowerCase().includes(filterStr.toLowerCase()) || 
+                i.name.toLowerCase().includes(filterStr.toLowerCase())
+            );
+
+            filtered.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-mono text-sm text-slate-500">${item.sku}</td>
+                    <td class="py-3 px-4 font-medium text-slate-800">${item.name}</td>
+                    <td class="py-3 px-4 text-slate-600">${formatMoney(item.price)}</td>
+                    <td class="py-3 px-4 text-center font-bold text-slate-800">${item.floorStock || 0}</td>
+                    <td class="py-3 px-4 text-center font-bold text-slate-800">${item.backroomStock || 0}</td>
+                    <td class="py-3 px-4 text-sm text-slate-500 font-mono tracking-wide">${item.location || 'UNASSIGNED'}</td>
+                    <td class="py-3 px-4 text-right">
+                        <button onclick="editInventory('${item.sku}')" class="text-blue-600 hover:bg-blue-100 p-2 rounded transition-colors" title="Edit"><i class="ph ph-pencil-simple"></i></button>
+                        <button onclick="deleteInventory('${item.sku}')" class="text-red-600 hover:bg-red-100 p-2 rounded transition-colors ml-1" title="Delete"><i class="ph ph-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('search-inventory').addEventListener('input', (e) => renderInventory(e.target.value));
+
+        window.adjustStock = async (sku, change) => {
+            const item = state.inventory.find(i => i.sku === sku);
+            if(!item) return;
+            
+            const newStock = Math.max(0, (item.stock || 0) + change);
+            try {
+                await setDoc(doc(inventoryRef, sku), { stock: newStock }, { merge: true });
+                item.stock = newStock;
+                renderInventory(document.getElementById('search-inventory').value);
+            } catch (e) {
+                showToast("Failed to update stock", "error");
+            }
+        }
+
+        window.saveInventory = async () => {
+            const sku = document.getElementById('inv-form-sku').value.trim().toUpperCase();
+            const name = document.getElementById('inv-form-name').value.trim();
+            const price = parseFloat(document.getElementById('inv-form-price').value);
+            const location = document.getElementById('inv-form-location').value.trim().toUpperCase();
+            const floorStock = parseInt(document.getElementById('inv-form-floor').value) || 0;
+            const backroomStock = parseInt(document.getElementById('inv-form-backroom').value) || 0;
+
+            if (!sku || !name || isNaN(price)) {
+                showToast("Please fill all required fields correctly.", "error");
+                return;
+            }
+
+            const itemData = { sku, name, price, location, floorStock, backroomStock };
+
+            try {
+                await setDoc(doc(inventoryRef, sku), itemData);
+                
+                const idx = state.inventory.findIndex(i => i.sku === sku);
+                if (idx > -1) {
+                    state.inventory[idx] = { id: sku, ...itemData };
+                } else {
+                    state.inventory.push({ id: sku, ...itemData });
+                }
+                
+                renderInventory();
+                closeModals();
+                showToast(`Saved ${name}`, "success");
+            } catch (e) {
+                showToast("Error saving item.", "error");
+            }
+        };
+
+        window.editInventory = (sku) => {
+            const item = state.inventory.find(i => i.sku === sku);
+            if(!item) return;
+            
+            document.getElementById('inv-modal-title').textContent = "Edit Item";
+            const skuInput = document.getElementById('inv-form-sku');
+            skuInput.value = item.sku;
+            skuInput.disabled = true;
+            document.getElementById('inv-form-name').value = item.name;
+            document.getElementById('inv-form-price').value = item.price;
+            document.getElementById('inv-form-location').value = item.location || '';
+            document.getElementById('inv-form-floor').value = item.floorStock || 0;
+            document.getElementById('inv-form-backroom').value = item.backroomStock || 0;
+            
+            openModal('inventory-modal');
+        }
+
+        window.deleteInventory = async (sku) => {
+            try {
+                await deleteDoc(doc(inventoryRef, sku));
+                state.inventory = state.inventory.filter(i => i.sku !== sku);
+                renderInventory();
+                showToast("Item deleted", "success");
+            } catch (e) {
+                showToast("Failed to delete", "error");
+            }
+        }
+
+
+        // --- USERS LOGIC ---
+        async function fetchUsers() {
+            try {
+                const snapshot = await getDocs(accountsRef);
+                state.users = [];
+                snapshot.forEach(doc => {
+                    state.users.push({ id: doc.id, ...doc.data() });
+                });
+                renderUsers();
+            } catch (e) {
+                showToast("Failed to fetch users", "error");
+            }
+        }
+
+        function renderUsers() {
+            const grid = document.getElementById('users-grid');
+            grid.innerHTML = '';
+            
+            state.users.forEach(user => {
+                const deptColor = user.department === 'Admin' ? 'bg-purple-100 text-purple-700 border-purple-200' :
+                                  user.department === 'Manager' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                                  'bg-blue-100 text-blue-700 border-blue-200';
+                                  
+                const card = document.createElement('div');
+                card.className = "bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col relative group";
+                card.innerHTML = `
+                    <div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                        <button onclick="printUserId('${user.id}')" class="text-slate-500 hover:bg-slate-50 p-1.5 rounded" title="Print ID"><i class="ph ph-printer"></i></button>
+                        <button onclick="editUser('${user.id}')" class="text-blue-500 hover:bg-blue-50 p-1.5 rounded"><i class="ph ph-pencil-simple"></i></button>
+                        <button onclick="deleteUser('${user.id}')" class="text-red-500 hover:bg-red-50 p-1.5 rounded"><i class="ph ph-trash"></i></button>
+                    </div>
+                    <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-4 border border-slate-200">
+                        <i class="ph ph-user text-2xl text-slate-400"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-800 text-lg">${user.name}</h4>
+                    <div class="mt-2 flex items-center gap-2">
+                        <span class="px-2.5 py-1 rounded-md text-xs font-semibold border ${deptColor}">${user.department || 'Staff'}</span>
+                        <span class="text-xs text-slate-500 font-mono flex items-center gap-1"><i class="ph-fill ph-lock-key"></i> ${user.pin ? '••••' : 'No PIN'}</span>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        window.saveUser = async () => {
+            const id = document.getElementById('user-form-id').value || 'user-' + Date.now();
+            const name = document.getElementById('user-form-name').value.trim();
+            const department = document.getElementById('user-form-dept').value;
+            const pin = document.getElementById('user-form-pin').value.trim();
+
+            if (!name || !pin) {
+                showToast("Name and PIN are required.", "error");
+                return;
+            }
+
+            const userData = { name, department, pin };
+
+            try {
+                await setDoc(doc(accountsRef, id), userData);
+                
+                const idx = state.users.findIndex(u => u.id === id);
+                if (idx > -1) state.users[idx] = { id, ...userData };
+                else state.users.push({ id, ...userData });
+                
+                renderUsers();
+                closeModals();
+                showToast("Employee saved", "success");
+            } catch (e) {
+                showToast("Error saving employee", "error");
+            }
+        };
+
+        window.editUser = (id) => {
+            const user = state.users.find(u => u.id === id);
+            if(!user) return;
+            
+            document.getElementById('user-modal-title').textContent = "Edit Employee";
+            document.getElementById('user-form-id').value = user.id;
+            document.getElementById('user-form-name').value = user.name;
+            document.getElementById('user-form-dept').value = user.department || 'Cashier';
+            document.getElementById('user-form-pin').value = user.pin;
+            
+            openModal('user-modal');
+        }
+
+        window.deleteUser = async (id) => {
+            try {
+                await deleteDoc(doc(accountsRef, id));
+                state.users = state.users.filter(u => u.id !== id);
+                renderUsers();
+                showToast("Employee removed", "success");
+            } catch (e) {
+                showToast("Failed to delete", "error");
+            }
+        }
+
+        window.printUserId = (id) => {
+            const user = state.users.find(u => u.id === id);
+            if (!user) return;
+            
+            const now = new Date();
+            
+            // Populate the HTML
+            document.getElementById('id-name').textContent = user.name;
+            document.getElementById('id-dept').textContent = user.department || 'Staff';
+            document.getElementById('id-date').textContent = "Generated: " + now.toLocaleString();
+            
+            // Draw the barcode for the PIN
+            JsBarcode("#id-barcode", user.pin, {
+                format: "CODE128",
+                width: 2.5,
+                height: 60,
+                displayValue: true,
+                fontSize: 18,
+                margin: 0
+            });
+            
+            // Show the modal
+            openModal('id-modal');
+        };
+
+        // --- PULL-SHEET LOGIC ---
+        window.renderPullSheet = () => {
+            const tbody = document.getElementById('pullsheet-tbody');
+            tbody.innerHTML = '';
+            
+            // Filter items with 10 or fewer on the floor, but only if we have backroom stock to give
+            const needsRestock = state.inventory.filter(i => (i.floorStock || 0) <= 10 && (i.backroomStock || 0) > 0);
+            
+            // Sort by location alphabetically to optimize the runner's walking path
+            needsRestock.sort((a, b) => (a.location || '').localeCompare(b.location || ''));
+
+            if (needsRestock.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-500 font-medium">All floor stock levels are healthy, or backroom is empty!</td></tr>`;
+                return;
+            }
+
+            needsRestock.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-sm font-bold text-blue-600 tracking-wide uppercase">${item.location || 'UNASSIGNED'}</td>
+                    <td class="py-3 px-4 font-medium text-slate-800">
+                        ${item.name}
+                        <div class="font-mono text-xs text-slate-400">${item.sku}</div>
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-100 text-red-700 font-bold">${item.floorStock || 0}</span>
+                    </td>
+                    <td class="py-3 px-4 text-center font-medium text-slate-600">${item.backroomStock || 0}</td>
+                    <td class="py-3 px-4 text-right space-x-1">
+                        <button onclick="transferStock('${item.sku}', 1)" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded font-medium text-sm transition-colors">Move 1</button>
+                        <button onclick="transferStock('${item.sku}', 5)" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded font-medium text-sm transition-colors">Move 5</button>
+                        <button onclick="transferStock('${item.sku}', 'ALL')" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded font-medium text-sm transition-colors">Move All</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        };
+
+        window.transferStock = async (sku, amount) => {
+            const item = state.inventory.find(i => i.sku === sku);
+            if(!item) return;
+            
+            // Determine exact amount to move
+            let transferQty = 0;
+            if (amount === 'ALL') {
+                transferQty = item.backroomStock;
+            } else {
+                transferQty = Math.min(amount, item.backroomStock);
+            }
+            
+            if (transferQty <= 0) return;
+
+            const newFloor = (item.floorStock || 0) + transferQty;
+            const newBackroom = (item.backroomStock || 0) - transferQty;
+
+            try {
+                // Atomic update to keep database in sync
+                await updateDoc(doc(inventoryRef, sku), {
+                    floorStock: newFloor,
+                    backroomStock: newBackroom
+                });
+                
+                // Update local state instantly
+                item.floorStock = newFloor;
+                item.backroomStock = newBackroom;
+                
+                // Re-render the pull-sheet to remove or update the row
+                renderPullSheet();
+                showToast(`Moved ${transferQty} ${item.name} to the floor`, "success");
+            } catch (e) {
+                showToast("Failed to transfer stock", "error");
+            }
+        };
+
+
+        // --- RECEIPTS LOGIC ---
+        async function fetchReceipts() {
+            try {
+                // Fetching all for simple sorting in memory as per guidelines
+                const snapshot = await getDocs(receiptsRef);
+                state.receipts = [];
+                snapshot.forEach(doc => {
+                    state.receipts.push({ id: doc.id, ...doc.data() });
+                });
+                
+                // Sort by timestamp descending
+                state.receipts.sort((a, b) => {
+                    const timeA = a.timestamp?.seconds || 0;
+                    const timeB = b.timestamp?.seconds || 0;
+                    return timeB - timeA;
+                });
+                
+                renderReceipts();
+            } catch (e) {
+                showToast("Failed to fetch receipts", "error");
+            }
+        }
+
+        function renderReceipts(filterStr = '') {
+            const tbody = document.getElementById('receipts-tbody');
+            tbody.innerHTML = '';
+            
+            const filtered = state.receipts.filter(r => r.id.toLowerCase().includes(filterStr.toLowerCase()));
+
+            filtered.forEach(r => {
+                const dateStr = r.timestamp ? new Date(r.timestamp.seconds * 1000).toLocaleString() : 'Unknown Date';
+                const isReturn = r.type === 'return';
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-mono text-xs text-slate-500">${r.id}</td>
+                    <td class="py-3 px-4 text-sm text-slate-700">${dateStr}</td>
+                    <td class="py-3 px-4">
+                        <span class="px-2 py-1 rounded text-xs font-semibold ${isReturn ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}">
+                            ${isReturn ? 'RETURN' : 'SALE'}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 font-bold ${isReturn ? 'text-red-600' : 'text-slate-800'}">
+                        ${isReturn ? '-' : ''}${formatMoney(r.total || 0)}
+                    </td>
+                    <td class="py-3 px-4 text-right">
+                        <button onclick="viewReceipt('${r.id}')" class="text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded text-sm font-medium transition-colors">View / Print</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('search-receipts').addEventListener('input', (e) => renderReceipts(e.target.value));
+
+        window.viewReceipt = (id) => {
+            const r = state.receipts.find(x => x.id === id);
+            if(!r) return;
+
+            const dateStr = r.timestamp ? new Date(r.timestamp.seconds * 1000).toLocaleString() : 'Unknown Date';
+            document.getElementById('print-date').textContent = dateStr;
+            document.getElementById('print-id').textContent = id;
+            document.getElementById('print-type').textContent = r.type === 'return' ? 'REFUND RECEIPT' : 'SALE RECEIPT';
+            document.getElementById('print-total').textContent = (r.type === 'return' ? '-' : '') + formatMoney(r.total || 0);
+
+            const itemsContainer = document.getElementById('print-items');
+            itemsContainer.innerHTML = '';
+            (r.items || []).forEach(item => {
+                itemsContainer.innerHTML += `
+                    <div class="flex justify-between">
+                        <span>${item.name}</span>
+                        <span>${(r.type === 'return' ? '-' : '')}${formatMoney(item.price)}</span>
+                    </div>
+                `;
+            });
+
+            const payContainer = document.getElementById('print-payments');
+            payContainer.innerHTML = '';
+            (r.payments || []).forEach(p => {
+                payContainer.innerHTML += `
+                    <div class="flex justify-between">
+                        <span>TENDER: ${p.method} ${p.meta || ''}</span>
+                        <span>${formatMoney(p.amount)}</span>
+                    </div>
+                `;
+            });
+
+            openModal('receipt-modal');
+        };
+
+        // --- RETURNS LOGIC ---
+        window.loadReceiptForReturn = async () => {
+            const inputId = document.getElementById('return-receipt-id').value.trim();
+            if(!inputId) return;
+
+            showToast("Searching...", "info");
+            try {
+                const docSnap = await getDoc(doc(receiptsRef, inputId));
+                
+                if (!docSnap.exists()) {
+                    showToast("Receipt not found.", "error");
+                    return;
+                }
+
+                const rData = docSnap.data();
+                if(rData.type === 'return') {
+                    showToast("Cannot return an already processed return receipt.", "error");
+                    return;
+                }
+
+                state.currentReturnReceipt = { id: docSnap.id, ...rData };
+                state.returnSelections.clear();
+                
+                // Update UI
+                document.getElementById('return-details-area').classList.remove('hidden');
+                document.getElementById('ret-orig-id').textContent = docSnap.id;
+                document.getElementById('ret-orig-date').textContent = rData.timestamp ? new Date(rData.timestamp.seconds * 1000).toLocaleString() : '';
+                document.getElementById('ret-orig-total').textContent = formatMoney(rData.total || 0);
+
+                const tbody = document.getElementById('return-items-tbody');
+                tbody.innerHTML = '';
+                
+                (rData.items || []).forEach((item, index) => {
+                    // Unique item index to handle multiples of same SKU
+                    const uniqueItemId = `${item.sku}-${index}`;
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-slate-50";
+                    tr.innerHTML = `
+                        <td class="py-3 px-6">
+                            <input type="checkbox" id="chk-${uniqueItemId}" class="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" onchange="toggleReturnItem('${uniqueItemId}', ${item.price}, this.checked)">
+                        </td>
+                        <td class="py-3 px-6 font-mono text-sm text-slate-500">${item.sku}</td>
+                        <td class="py-3 px-6 font-medium">${item.name}</td>
+                        <td class="py-3 px-6 text-right">${formatMoney(item.price)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                updateReturnTotal();
+                showToast("Receipt loaded.", "success");
+
+            } catch (e) {
+                console.error(e);
+                showToast("Error fetching receipt.", "error");
+            }
+        };
+
+        window.toggleReturnItem = (uniqueId, price, isChecked) => {
+            if(isChecked) {
+                // Find original item in receipt items array based on index in uniqueId
+                const parts = uniqueId.split('-');
+                const idx = parseInt(parts[parts.length-1]);
+                const itemData = state.currentReturnReceipt.items[idx];
+                state.returnSelections.add({ uniqueId, ...itemData });
+            } else {
+                for (let item of state.returnSelections) {
+                    if (item.uniqueId === uniqueId) {
+                        state.returnSelections.delete(item);
+                        break;
+                    }
+                }
+            }
+            updateReturnTotal();
+        };
+
+        function updateReturnTotal() {
+            let total = 0;
+            state.returnSelections.forEach(item => total += item.price);
+            document.getElementById('return-refund-total').textContent = formatMoney(total);
+        }
+
+        window.processReturnTransaction = async () => {
+            if(state.returnSelections.size === 0) {
+                showToast("Select at least one item to return.", "error");
+                return;
+            }
+
+            let refundTotal = 0;
+            const returnItems = [];
+            
+            state.returnSelections.forEach(item => {
+                refundTotal += item.price;
+                returnItems.push({ sku: item.sku, name: item.name, price: item.price });
+            });
+
+            // Reconstruct payments array (mocking returning cash/card proportion)
+            // For simplicity, we create a single generic refund tender
+            const refundPayments = [{ method: 'REFUND', amount: refundTotal }];
+
+            const returnReceipt = {
+                timestamp: serverTimestamp(),
+                originalReceiptId: state.currentReturnReceipt.id,
+                type: 'return',
+                items: returnItems,
+                total: refundTotal,
+                payments: refundPayments
+            };
+
+            try {
+                // Save the new return receipt
+                const newDocRef = doc(receiptsRef);
+                await setDoc(newDocRef, returnReceipt);
+
+                // Optional: Update Inventory Stock (Add back)
+                // We will do this sequentially to ensure accuracy
+                for(let item of returnItems) {
+                     const invItem = state.inventory.find(i => i.sku === item.sku);
+                     if(invItem) {
+                         const newStock = (invItem.stock || 0) + 1;
+                         await setDoc(doc(inventoryRef, item.sku), { stock: newStock }, { merge: true });
+                         invItem.stock = newStock; // update local
+                     }
+                }
+
+                showToast("Refund processed successfully.", "success");
+                
+                // Clear UI
+                document.getElementById('return-details-area').classList.add('hidden');
+                document.getElementById('return-receipt-id').value = '';
+                
+                // Push to local receipts state and show it
+                // Re-fetch to ensure timestamp is real
+                await fetchReceipts(); 
+                
+                // Print the new receipt automatically
+                viewReceipt(newDocRef.id);
+                setTimeout(() => window.print(), 500);
+
+            } catch (e) {
+                console.error(e);
+                showToast("Failed to process refund.", "error");
+            }
+        };
+
+        // --- BUNDLE BUILDER LOGIC ---
+        document.getElementById('bundle-search').addEventListener('input', (e) => renderBundleInventoryPicker(e.target.value));
+
+        window.renderBundleInventoryPicker = (filterStr = '') => {
+            const tbody = document.getElementById('bundle-inventory-list');
+            tbody.innerHTML = '';
+            
+            // Filter out existing bundles so we don't put a bundle inside a bundle
+            const availableItems = state.inventory.filter(i => 
+                !i.isBundle && 
+                (i.sku.toLowerCase().includes(filterStr.toLowerCase()) || i.name.toLowerCase().includes(filterStr.toLowerCase()))
+            );
+
+            availableItems.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50";
+                tr.innerHTML = `
+                    <td class="py-2 px-4 text-sm font-medium text-slate-800">${item.name}</td>
+                    <td class="py-2 px-4 text-right">
+                        <button onclick="addToBundleDraft('${item.sku}')" class="bg-slate-200 hover:bg-slate-300 text-slate-700 w-8 h-8 rounded-full font-bold transition-colors">+</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        };
+
+        window.addToBundleDraft = (sku) => {
+            const item = state.inventory.find(i => i.sku === sku);
+            if (!item) return;
+            
+            const existing = state.bundleDraft.find(b => b.sku === sku);
+            if (existing) {
+                existing.qty += 1;
+            } else {
+                state.bundleDraft.push({ sku: item.sku, name: item.name, qty: 1 });
+            }
+            renderBundleDraftUI();
+        };
+
+        window.removeFromBundleDraft = (sku) => {
+            state.bundleDraft = state.bundleDraft.filter(b => b.sku !== sku);
+            renderBundleDraftUI();
+        };
+
+        window.renderBundleDraftUI = () => {
+            const container = document.getElementById('bundle-draft-list');
+            if (state.bundleDraft.length === 0) {
+                container.innerHTML = '<div class="text-sm text-slate-400 italic">No items added yet.</div>';
+                return;
+            }
+            
+            container.innerHTML = state.bundleDraft.map(item => `
+                <div class="flex justify-between items-center bg-slate-50 border border-slate-200 p-2 rounded">
+                    <span class="text-sm font-medium text-slate-700">${item.qty}x ${item.name}</span>
+                    <button onclick="removeFromBundleDraft('${item.sku}')" class="text-red-500 hover:text-red-700 p-1"><i class="ph ph-x"></i></button>
+                </div>
+            `).join('');
+        };
+
+        window.saveBundle = async () => {
+            const name = document.getElementById('bundle-name').value.trim();
+            const price = parseFloat(document.getElementById('bundle-price').value);
+            
+            if (!name || isNaN(price) || state.bundleDraft.length === 0) {
+                showToast("Enter a name, price, and at least one item.", "error");
+                return;
+            }
+
+            // Generate unique SKU
+            const bundleSku = 'BNDL-' + Math.floor(1000 + Math.random() * 9000);
+            
+            const bundleData = {
+                sku: bundleSku,
+                name: name,
+                price: price,
+                isBundle: true,
+                components: state.bundleDraft,
+                floorStock: 999, // Bundles are virtually unlimited, constrained only by components
+                backroomStock: 0,
+                location: 'VIRTUAL'
+            };
+
+            try {
+                await setDoc(doc(inventoryRef, bundleSku), bundleData);
+                state.inventory.push({ id: bundleSku, ...bundleData });
+                
+                // Reset Form
+                document.getElementById('bundle-name').value = '';
+                document.getElementById('bundle-price').value = '';
+                state.bundleDraft = [];
+                renderBundleDraftUI();
+                renderInventory(); // Update main inventory table
+                
+                showToast(`Created Bundle: ${bundleSku}`, "success");
+            } catch (e) {
+                showToast("Failed to create bundle", "error");
+            }
+        };
+
+        // Trigger the initial render of the picker when the app loads
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(renderBundleInventoryPicker, 1000);
+        });
+
+        // --- PRICING LOGIC ---
+        window.renderPricingList = () => {
+            const tbody = document.getElementById('pricing-tbody');
+            tbody.innerHTML = '';
+            
+            // Uncheck select all
+            const selectAllCb = document.getElementById('selectAllPricing');
+            if(selectAllCb) selectAllCb.checked = false;
+
+            state.inventory.forEach(item => {
+                let registerPrice = item.price;
+                let modBadge = '<span class="text-slate-400 text-xs italic">None</span>';
+                
+                if (item.modifier && item.modifier.active) {
+                    if (item.modifier.type === 'percent') {
+                        registerPrice = item.price * (1 + (item.modifier.value / 100));
+                        modBadge = `<span class="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-bold">${item.modifier.value > 0 ? '+' : ''}${item.modifier.value}%</span>`;
+                    } else if (item.modifier.type === 'flat') {
+                        registerPrice = item.price + item.modifier.value;
+                        modBadge = `<span class="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-bold">${item.modifier.value > 0 ? '+' : ''}$${Math.abs(item.modifier.value).toFixed(2)}</span>`;
+                    }
+                    registerPrice = Math.max(0, registerPrice);
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-center">
+                        <input type="checkbox" class="pricing-checkbox w-4 h-4 rounded border-slate-300" data-sku="${item.sku}">
+                    </td>
+                    <td class="py-3 px-4">
+                        <div class="font-medium text-slate-800">${item.name}</div>
+                        <div class="font-mono text-xs text-slate-500">${item.sku}</div>
+                    </td>
+                    <td class="py-3 px-4 text-slate-600">${formatMoney(item.price)}</td>
+                    <td class="py-3 px-4">${modBadge}</td>
+                    <td class="py-3 px-4 text-right font-bold ${item.modifier?.active ? 'text-blue-600' : 'text-slate-800'}">
+                        ${formatMoney(registerPrice)}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        };
+
+        window.toggleAllPricing = (checkbox) => {
+            const checkboxes = document.querySelectorAll('.pricing-checkbox');
+            checkboxes.forEach(cb => cb.checked = checkbox.checked);
+        };
+
+        window.applyPricingModifiers = async () => {
+            const type = document.getElementById('price-mod-type').value;
+            const value = parseFloat(document.getElementById('price-mod-value').value);
+            
+            if (isNaN(value)) {
+                showToast("Enter a valid modifier amount.", "error");
+                return;
+            }
+
+            const checkboxes = document.querySelectorAll('.pricing-checkbox:checked');
+            if (checkboxes.length === 0) {
+                showToast("Select at least one item.", "error");
+                return;
+            }
+
+            const modifier = { active: true, type, value };
+            await batchUpdateModifiers(checkboxes, modifier);
+        };
+
+        window.clearPricingModifiers = async () => {
+            const checkboxes = document.querySelectorAll('.pricing-checkbox:checked');
+            if (checkboxes.length === 0) {
+                showToast("Select at least one item.", "error");
+                return;
+            }
+            
+            const modifier = { active: false, type: 'flat', value: 0 };
+            await batchUpdateModifiers(checkboxes, modifier);
+        };
+
+        async function batchUpdateModifiers(checkboxNodes, modifierData) {
+            showToast(`Updating ${checkboxNodes.length} items...`, "info");
+            
+            try {
+                for (const cb of checkboxNodes) {
+                    const sku = cb.dataset.sku;
+                    await updateDoc(doc(inventoryRef, sku), { modifier: modifierData });
+                    
+                    // Update local state instantly
+                    const item = state.inventory.find(i => i.sku === sku);
+                    if (item) item.modifier = modifierData;
+                }
+                
+                document.getElementById('price-mod-value').value = '';
+                renderPricingList();
+                showToast("Pricing updated successfully.", "success");
+            } catch (e) {
+                console.error(e);
+                showToast("Failed to update pricing.", "error");
+            }
+        }
+
+        // --- REPORTS LOGIC ---
+        window.runReport = async () => {
+            const type = document.getElementById('report-type').value;
+            const startVal = document.getElementById('report-start').value;
+            const endVal = document.getElementById('report-end').value;
+
+            if (!startVal || !endVal) {
+                showToast("Please select both a start and end date.", "error");
+                return;
+            }
+
+            showToast("Compiling analytics...", "info");
+
+            // Force a fresh fetch so we have the absolute latest sales and stock data
+            await fetchReceipts();
+            await fetchInventory();
+
+            const startDate = new Date(startVal);
+            startDate.setHours(0, 0, 0, 0);
+            const endDate = new Date(endVal);
+            endDate.setHours(23, 59, 59, 999);
+
+            const diffTime = Math.abs(endDate - startDate);
+            const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+
+            if (type === 'reorder') {
+                generateReorderReport(startDate, endDate, diffDays);
+            }
+        };
+
+        function generateReorderReport(startDate, endDate, diffDays) {
+            const salesCounts = {};
+            
+            // 1. Calculate sales volume per SKU in the selected time range
+            state.receipts.forEach(r => {
+                if (!r.timestamp || r.type === 'return') return;
+                const rDate = new Date(r.timestamp.seconds * 1000);
+                
+                if (rDate >= startDate && rDate <= endDate) {
+                    (r.items || []).forEach(item => {
+                        salesCounts[item.sku] = (salesCounts[item.sku] || 0) + 1;
+                    });
+                }
+            });
+
+            // 2. Identify physical inventory running low
+            const lowStockItems = state.inventory.filter(i => {
+                const total = (i.floorStock || 0) + (i.backroomStock || 0);
+                return total <= 10 && !i.isBundle; // Exclude virtual bundles
+            });
+
+            // 3. Project Out-Of-Stock (OOS) dates
+            const reportRows = lowStockItems.map(item => {
+                const totalStock = (item.floorStock || 0) + (item.backroomStock || 0);
+                const soldInRange = salesCounts[item.sku] || 0;
+                const dailyRate = soldInRange / diffDays;
+                
+                let oosDateStr = "N/A (No Recent Sales)";
+                if (dailyRate > 0) {
+                    const daysRemaining = totalStock / dailyRate;
+                    const oosDate = new Date();
+                    oosDate.setDate(oosDate.getDate() + daysRemaining);
+                    
+                    // Highlight dates that are extremely close
+                    if (daysRemaining <= 2) {
+                        oosDateStr = `<span style="color: #dc2626; font-weight: bold;">CRITICAL: ${oosDate.toLocaleDateString()}</span>`;
+                    } else {
+                        oosDateStr = oosDate.toLocaleDateString();
+                    }
+                }
+
+                return {
+                    sku: item.sku,
+                    name: item.name,
+                    stock: totalStock,
+                    velocity: dailyRate.toFixed(1),
+                    oosDate: oosDateStr
+                };
+            });
+
+            // Sort by lowest stock first
+            reportRows.sort((a, b) => a.stock - b.stock);
+
+            // 4. Inject into Print Area
+            const printArea = document.getElementById('print-report-area');
+            
+            let rowsHtml = reportRows.map(r => `
+                <tr style="border-bottom: 1px solid #e2e8f0;">
+                    <td style="padding: 12px; font-family: monospace; color: #475569;">${r.sku}</td>
+                    <td style="padding: 12px; font-weight: 600;">${r.name}</td>
+                    <td style="padding: 12px; text-align: center; font-weight: bold; font-size: 16px;">${r.stock}</td>
+                    <td style="padding: 12px; text-align: center;">${r.velocity} / day</td>
+                    <td style="padding: 12px; text-align: right;">${r.oosDate}</td>
+                </tr>
+            `).join('');
+
+            if (reportRows.length === 0) {
+                rowsHtml = `<tr><td colspan="5" style="padding: 30px; text-align: center; color: #64748b;">All physical items currently have more than 10 units in stock.</td></tr>`;
+            }
+
+            printArea.innerHTML = `
+                <div style="font-family: sans-serif; padding: 40px; color: #0f172a;">
+                    <div style="text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 20px; margin-bottom: 30px;">
+                        <h1 style="margin: 0 0 10px 0; font-size: 28px; text-transform: uppercase; letter-spacing: 1px;">Low Stock & Reorder Projections</h1>
+                        <p style="margin: 0; color: #475569; font-size: 14px;"><strong>Sales Analyzed:</strong> ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}</p>
+                        <p style="margin: 5px 0 0 0; color: #475569; font-size: 14px;"><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+                    </div>
+                    
+                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
+                        <thead>
+                            <tr style="background-color: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
+                                <th style="padding: 12px;">SKU</th>
+                                <th style="padding: 12px;">Item Name</th>
+                                <th style="padding: 12px; text-align: center;">Combined Stock</th>
+                                <th style="padding: 12px; text-align: center;">Sales Velocity</th>
+                                <th style="padding: 12px; text-align: right;">Est. Empty Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHtml}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            // Strip the hidden class temporarily to allow print driver to read it, then open print dialog
+            printArea.classList.remove('hidden');
+            window.print();
+            printArea.classList.add('hidden');
+        }
+
+        // --- AUDIT LOGIC ---
+        window.startAudit = () => {
+            state.audit = { active: true, step: 1, floorCounts: {}, storageCounts: {} };
+            document.getElementById('audit-wizard').classList.remove('hidden');
+            document.getElementById('audit-wizard').classList.add('flex');
+            renderAuditUI();
+        };
+
+        window.cancelAudit = () => {
+            state.audit.active = false;
+            document.getElementById('audit-wizard').classList.add('hidden');
+            document.getElementById('audit-wizard').classList.remove('flex');
+        };
+
+        function renderAuditUI() {
+            const step = state.audit.step;
+            const subtitle = document.getElementById('audit-subtitle');
+            const scanTitle = document.getElementById('audit-scan-title');
+            const scanInput = document.getElementById('audit-scanner-input');
+            const nextBtn = document.getElementById('audit-next-btn');
+            const scanArea = document.getElementById('audit-scan-area');
+            const thead = document.getElementById('audit-table-head');
+
+            if (step === 1) {
+                subtitle.textContent = "Step 1: Sales Floor";
+                scanTitle.textContent = "Scan Floor Items";
+                scanArea.classList.remove('hidden');
+                nextBtn.innerHTML = `Proceed to Storage <i class="ph ph-arrow-right"></i>`;
+                nextBtn.onclick = () => { state.audit.step = 2; renderAuditUI(); };
+                thead.innerHTML = `<tr><th class="py-3 px-4 w-1/4 font-semibold text-slate-600">SKU</th><th class="py-3 px-4 w-1/2 font-semibold text-slate-600">Item</th><th class="py-3 px-4 w-1/4 text-right font-semibold text-slate-600">Floor Count</th></tr>`;
+                renderAuditList();
+                setTimeout(() => scanInput.focus(), 50);
+            } else if (step === 2) {
+                subtitle.textContent = "Step 2: Backroom Storage";
+                scanTitle.textContent = "Scan Storage Items";
+                scanArea.classList.remove('hidden');
+                nextBtn.innerHTML = `Review Discrepancies <i class="ph ph-arrow-right"></i>`;
+                nextBtn.onclick = () => { state.audit.step = 3; renderAuditUI(); };
+                thead.innerHTML = `<tr><th class="py-3 px-4 w-1/4 font-semibold text-slate-600">SKU</th><th class="py-3 px-4 w-1/2 font-semibold text-slate-600">Item</th><th class="py-3 px-4 w-1/4 text-right font-semibold text-slate-600">Storage Count</th></tr>`;
+                renderAuditList();
+                setTimeout(() => scanInput.focus(), 50);
+            } else if (step === 3) {
+                subtitle.textContent = "Step 3: Review & Commit";
+                scanArea.classList.add('hidden'); // hide scanner to go full width
+                thead.innerHTML = `
+                    <tr>
+                        <th class="py-3 px-4 text-sm font-semibold text-slate-600">SKU / Item</th>
+                        <th class="py-3 px-4 text-sm font-semibold text-slate-600 text-center">Floor</th>
+                        <th class="py-3 px-4 text-sm font-semibold text-slate-600 text-center">Storage</th>
+                        <th class="py-3 px-4 text-sm font-semibold text-slate-600 text-center bg-slate-100">Total Scanned</th>
+                        <th class="py-3 px-4 text-sm font-semibold text-slate-600 text-center">Expected (System)</th>
+                        <th class="py-3 px-4 text-sm font-semibold text-slate-600 text-right">Difference</th>
+                    </tr>
+                `;
+                renderAuditReviewList();
+            }
+        }
+
+        document.getElementById('audit-scanner-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const sku = e.target.value.trim().toUpperCase();
+                e.target.value = ''; // clear immediately
+                if (!sku) return;
+
+                const item = state.inventory.find(i => i.sku === sku);
+                if (!item) {
+                    showToast(`SKU ${sku} not found in system!`, "error");
+                    return;
+                }
+
+                if (state.audit.step === 1) {
+                    state.audit.floorCounts[sku] = (state.audit.floorCounts[sku] || 0) + 1;
+                } else if (state.audit.step === 2) {
+                    state.audit.storageCounts[sku] = (state.audit.storageCounts[sku] || 0) + 1;
+                }
+                renderAuditList();
+            }
+        });
+
+        function renderAuditList() {
+            const tbody = document.getElementById('audit-tbody');
+            tbody.innerHTML = '';
+            const counts = state.audit.step === 1 ? state.audit.floorCounts : state.audit.storageCounts;
+            
+            // Show latest scanned at top
+            const entries = Object.entries(counts).reverse();
+            
+            entries.forEach(([sku, count]) => {
+                const item = state.inventory.find(i => i.sku === sku);
+                const name = item ? item.name : 'Unknown';
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="py-3 px-4 font-mono text-sm text-slate-500">${sku}</td>
+                        <td class="py-3 px-4 font-medium text-slate-800">${name}</td>
+                        <td class="py-3 px-4 text-right font-bold text-blue-600 text-xl">${count}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function renderAuditReviewList() {
+            const tbody = document.getElementById('audit-tbody');
+            tbody.innerHTML = '';
+            
+            // Collect all unique SKUs touched in the audit, plus all existing inventory
+            const allSkus = new Set([...Object.keys(state.audit.floorCounts), ...Object.keys(state.audit.storageCounts), ...state.inventory.map(i => i.sku)]);
+
+            Array.from(allSkus).sort().forEach(sku => {
+                const item = state.inventory.find(i => i.sku === sku) || { name: 'Unknown', stock: 0 };
+                const floor = state.audit.floorCounts[sku] || 0;
+                const storage = state.audit.storageCounts[sku] || 0;
+                const totalScanned = floor + storage;
+                const expected = item.stock || 0;
+                const diff = totalScanned - expected;
+
+                let diffColor = 'text-slate-500';
+                if (diff > 0) diffColor = 'text-emerald-600 font-bold';
+                if (diff < 0) diffColor = 'text-red-600 font-bold';
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50 border-b border-slate-100">
+                        <td class="py-4 px-4">
+                            <div class="font-medium text-slate-800">${item.name}</div>
+                            <div class="font-mono text-xs text-slate-500">${sku}</div>
+                        </td>
+                        <td class="py-4 px-4 text-center text-slate-600 text-lg">${floor}</td>
+                        <td class="py-4 px-4 text-center text-slate-600 text-lg">${storage}</td>
+                        <td class="py-4 px-4 text-center font-bold text-slate-800 bg-slate-50 text-xl border-x border-slate-100">${totalScanned}</td>
+                        <td class="py-4 px-4 text-center text-slate-400 text-lg">${expected}</td>
+                        <td class="py-4 px-4 text-right text-lg ${diffColor}">${diff > 0 ? '+'+diff : diff}</td>
+                    </tr>
+                `;
+            });
+
+            // Add Commit button at the end
+            tbody.innerHTML += `
+                <tr>
+                    <td colspan="6" class="p-8 text-right bg-slate-50 border-t border-slate-200">
+                        <button onclick="commitAudit()" class="bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-xl font-bold shadow-md transition-colors text-lg flex items-center justify-end gap-2 ml-auto">
+                            <i class="ph ph-warning-circle text-xl"></i> Commit Updates to Database
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+
+        window.commitAudit = async () => {
+            showToast("Committing audit to database...", "info");
+            try {
+                // For a full audit, un-scanned items become 0. 
+                // We update everything in the inventory to its newly scanned total.
+                for (const item of state.inventory) {
+                    const floor = state.audit.floorCounts[item.sku] || 0;
+                    const storage = state.audit.storageCounts[item.sku] || 0;
+                    const newTotal = floor + storage;
+                    
+                    if (item.stock !== newTotal) {
+                        // Keep 'stock' and alias 'quantity' synced if applicable
+                        await updateDoc(doc(inventoryRef, item.sku), {
+                            stock: newTotal,
+                            quantity: newTotal
+                        });
+                    }
+                }
+                
+                showToast("Audit successfully committed!", "success");
+                cancelAudit();
+                await fetchInventory(); // Force full refresh of the admin table
+                
+            } catch (err) {
+                console.error("Audit Commit Error:", err);
+                showToast("Failed to commit audit.", "error");
+            }
+        };
+
+        // Boot
+        window.addEventListener('DOMContentLoaded', initApp);
+
+    </script>
+</body>
+</html>

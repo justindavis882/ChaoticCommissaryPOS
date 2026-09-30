@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Print App | ChaoticCommissary</title>
+    <!-- JsBarcode library for barcode generation -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
+    <style>
+        /* Screen UI Styles */
+        :root {
+            --primary: #2563eb;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text: #0f172a;
+            --border: #e2e8f0;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 2rem;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: var(--surface);
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+        h1 { margin-top: 0; font-size: 1.5rem; }
+        .form-group {
+            margin-bottom: 1.25rem;
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+        input, select {
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        .checkbox-group {
+            flex-direction: row;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .checkbox-group input { width: auto; }
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 1rem;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 1rem;
+        }
+        button:hover { background-color: #1d4ed8; }
+        
+        #custom-fields { display: none; }
+
+        /* Print Styles */
+        @media print {
+            /* Hide the UI when printing */
+            body > *:not(#print-area) {
+                display: none;
+            }
+            body {
+                background: none;
+                padding: 0;
+                margin: 0;
+            }
+            #print-area {
+                display: block !important;
+            }
+            
+            /* General Label Print Settings */
+            .print-label {
+                page-break-after: always;
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                text-align: center;
+                overflow: hidden;
+                background: white;
+            }
+            .print-label:last-child {
+                page-break-after: avoid;
+            }
+            
+            /* Dynamic Sizes */
+            .size-2x1 { width: 2in; height: 1in; padding: 0.1in; }
+            .size-4x3 { width: 4in; height: 3in; padding: 0.25in; }
+            .size-11x85 { width: 11in; height: 8.5in; padding: 1in; justify-content: space-between;}
+
+            /* Label Elements */
+            .label-name { font-weight: bold; margin: 0; }
+            .size-2x1 .label-name { font-size: 8pt; }
+            .size-4x3 .label-name { font-size: 16pt; margin-bottom: 5px; }
+            .size-11x85 .label-name { font-size: 46pt; margin-bottom: 20px;}
+
+            .label-price { font-weight: bold; }
+            .size-2x1 .label-price { font-size: 12pt; margin: 2px 0; }
+            .size-4x3 .label-price { font-size: 24pt; margin: 10px 0; }
+            .size-11x85 .label-price { font-size: 72pt; margin: 20px 0;}
+
+            .label-barcode { margin: 2px 0; }
+            .size-2x1 .label-barcode { height: 30px !important; }
+            .size-4x3 .label-barcode { height: 60px !important; }
+            .size-11x85 .label-barcode { height: 150px !important; }
+
+            .label-date { font-size: 6pt; color: #333; margin-top: auto; }
+            .size-4x3 .label-date { font-size: 8pt; }
+            .size-11x85 .label-date { font-size: 12pt; }
+            
+            @page {
+                margin: 0; /* Let the elements dictate the size */
+            }
+        }
+        #print-area { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Print Job Creator</h1>
+        
+        <div class="form-group checkbox-group">
+            <input type="checkbox" id="custom-toggle" onchange="toggleCustomMode()">
+            <label for="custom-toggle">Print Custom Label</label>
+        </div>
+
+        <!-- Product Search Mode -->
+        <div id="product-mode">
+            <div class="form-group">
+                <label for="product-search">Scan or Search Product SKU</label>
+                <!-- In a real app, this input would trigger an API call or filter a database -->
+                <input type="text" id="product-search" placeholder="Enter SKU (e.g., 8675309)" oninput="handleSearchInput()">
+            </div>
+            <div class="form-group">
+                <label>Found Product:</label>
+                <input type="text" id="found-product" readonly placeholder="Waiting for SKU...">
+                <input type="hidden" id="found-price">
+            </div>
+        </div>
+
+        <!-- Custom Input Mode -->
+        <div id="custom-fields">
+            <div class="form-group">
+                <label for="custom-name">Custom Title / Name</label>
+                <input type="text" id="custom-name" placeholder="Enter label text">
+            </div>
+            <div class="form-group">
+                <label for="custom-sku">Custom Barcode (SKU)</label>
+                <input type="text" id="custom-sku" placeholder="Enter alphanumeric SKU">
+            </div>
+            <div class="form-group">
+                <label for="custom-price">Custom Price</label>
+                <input type="text" id="custom-price" placeholder="e.g., $19.99">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="label-size">Label Size</label>
+            <select id="label-size">
+                <option value="size-2x1">2" x 1" (Standard Tagging)</option>
+                <option value="size-4x3">4" x 3" (Non-Adhesive Tagging)</option>
+                <option value="size-11x85">11" x 8.5" (Specials & Sales)</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="print-qty">Quantity</label>
+            <input type="number" id="print-qty" value="1" min="1" max="500">
+        </div>
+
+        <button onclick="generatePrintJob()">Create & Print Job</button>
+        <button class="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white py-2 px-4 rounded-lg transition-colors" onclick="window.location.href='index.html'">Go Back</button>
+    </div>
+    
+
+    <!-- Hidden area used exclusively for the print dialog -->
+    <div id="print-area"></div>
+
+    <script type="module">
+       // Import the updated 11.6.1 SDKs, including Auth
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-pos-app';
+        const firebaseConfig = {
+            apiKey: "AIzaSyDuFg74Dvh8FydVdnvKlhShWTHq7SZASC0",
+            authDomain: "chaotic-commissary.firebaseapp.com",
+            projectId: "chaotic-commissary",
+            storageBucket: "chaotic-commissary.firebasestorage.app",
+            messagingSenderId: "282428310882",
+            appId: "1:282428310882:web:226ebc367cc69c296cd83b",
+            measurementId: "G-9S32HHN1Y2"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Authenticate silently so Firestore grants permission
+        signInAnonymously(auth).catch((error) => {
+            console.error("Auth failed:", error);
+        });
+
+        const finalSound = new Audio('final.mp3');
+
+        // Attach functions to the window object so the HTML inline event handlers can access them
+        window.toggleCustomMode = function() {
+            const isCustom = document.getElementById('custom-toggle').checked;
+            document.getElementById('product-mode').style.display = isCustom ? 'none' : 'block';
+            document.getElementById('custom-fields').style.display = isCustom ? 'block' : 'none';
+        };
+
+        // Debounce wrapper to prevent excessive database reads while typing
+        let searchTimeout;
+        window.handleSearchInput = function() {
+            const nameField = document.getElementById('found-product');
+            nameField.value = "Searching...";
+            
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(searchFirestore, 600); // Waits 600ms after typing stops
+        };
+
+        async function searchFirestore() {
+            const sku = document.getElementById('product-search').value.trim();
+            const nameField = document.getElementById('found-product');
+            const priceField = document.getElementById('found-price');
+            
+            if (!sku) {
+                nameField.value = "";
+                priceField.value = "";
+                return;
+            }
+
+            try {
+                // Assuming your Firestore collection is named 'inventory' and documents are named by their SKU
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'inventory', sku);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    // Adjust data.name and data.price to match your actual Firestore field names
+                    nameField.value = data.name || "Unnamed Item";
+                    const rawPrice = parseFloat(data.price || 0);
+                    priceField.value = `${rawPrice.toFixed(2)}`;
+                } else {
+                    nameField.value = "SKU not found";
+                    priceField.value = "";
+                }
+            } catch (error) {
+                console.error("Error reading from Firestore:", error);
+                nameField.value = "Database connection error";
+            }
+        }
+
+        window.generatePrintJob = function() {
+            const isCustom = document.getElementById('custom-toggle').checked;
+            const printArea = document.getElementById('print-area');
+            const sizeClass = document.getElementById('label-size').value;
+            const qty = parseInt(document.getElementById('print-qty').value) || 1;
+            
+            let name, sku, price;
+
+            if (isCustom) {
+                name = document.getElementById('custom-name').value || "Custom Label";
+                sku = document.getElementById('custom-sku').value || "000000";
+                price = document.getElementById('custom-price').value || "";
+            } else {
+                sku = document.getElementById('product-search').value || "000000";
+                name = document.getElementById('found-product').value || "Unknown Item";
+                price = document.getElementById('found-price').value || "";
+            }
+
+            const now = new Date();
+            const dateStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+            printArea.innerHTML = '';
+
+            for (let i = 0; i < qty; i++) {
+                const labelDiv = document.createElement('div');
+                labelDiv.className = `print-label ${sizeClass}`;
+                
+                labelDiv.innerHTML = `
+                    <p class="label-name">${name}</p>
+                    <p class="label-price">${"$" + price}</p>
+                    <svg class="label-barcode" id="barcode-${i}"></svg>
+                    <span class="label-date">Printed: ${dateStr}</span>
+                `;
+                
+                printArea.appendChild(labelDiv);
+                
+                JsBarcode(`#barcode-${i}`, sku, {
+                    format: "CODE128",
+                    displayValue: true,
+                    fontSize: 14,
+                    margin: 0,
+                    width: sizeClass === 'size-11x85' ? 4 : 2
+                });
+            }
+
+            finalSound.play();
+            window.print();
+        };
+    </script>
+</body>
+</html>
