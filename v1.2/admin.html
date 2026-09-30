@@ -81,6 +81,7 @@
 
             /* Standard Document Printers */
             #print-report-area {
+                display: block !important; /* This overrides Tailwind's hidden class safely */
                 position: absolute;
                 left: 0;
                 top: 0;
@@ -1702,11 +1703,8 @@
                     </table>
                 </div>
             `;
-
-            // Strip the hidden class temporarily to allow print driver to read it, then open print dialog
-            printArea.classList.remove('hidden');
+            
             window.print();
-            printArea.classList.add('hidden');
         }
 
         function generateEODReport(startDate, endDate) {
