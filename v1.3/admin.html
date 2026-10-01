@@ -738,6 +738,36 @@
             </div>
         </div>
 
+        <!-- Timesheet Edit Modal -->
+        <div id="timesheet-edit-modal" class="modal-content hidden bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-fadeIn z-[60]">
+            <div class="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                <h3 class="font-bold text-lg text-slate-800">Edit Timesheet Punch</h3>
+                <button onclick="closeEditTimesheetModal()" class="text-slate-400 hover:text-slate-600"><i class="ph ph-x text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="hidden" id="edit-ts-id">
+                <input type="hidden" id="edit-ts-uid">
+                <input type="hidden" id="edit-ts-name">
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Clock In Time</label>
+                    <input type="datetime-local" id="edit-ts-in" class="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Clock Out Time <span class="text-xs text-slate-400 font-normal">(Leave blank if active)</span></label>
+                    <input type="datetime-local" id="edit-ts-out" class="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Manager Note (Required)</label>
+                    <textarea id="edit-ts-reason" rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. Forgot to clock out, adjusted to 5 PM"></textarea>
+                </div>
+            </div>
+            <div class="p-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
+                <button onclick="closeEditTimesheetModal()" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors">Cancel</button>
+                <button onclick="saveTimesheetEdit()" class="px-4 py-2 text-white font-bold rounded-lg transition-colors bg-blue-600 hover:bg-blue-700 shadow-sm">Save Override</button>
+            </div>
+        </div>
+
         <!-- ID Print Modal -->
         <div id="id-modal" class="modal-content hidden bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-fadeIn">
             <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 no-print">
@@ -1465,6 +1495,8 @@
                     let duration = 0;
                     if(t.clockOut) {
                         duration = (new Date(t.clockOut) - new Date(t.clockIn)) / (1000 * 60 * 60);
+                    } else {
+                        duration = (new Date() - new Date(t.clockIn)) / (1000 * 60 * 60);
                     }
                     userTotals[uId].hours += duration;
                     userTotals[uId].shifts.push({...t, duration});
@@ -1521,17 +1553,87 @@
                 const outTime = s.clockOut ? new Date(s.clockOut) : null;
                 
                 tbody.innerHTML += `
-                    <tr class="border-b border-slate-100 last:border-0">
+                    <tr class="border-b border-slate-100 last:border-0 hover:bg-slate-50 group">
                         <td class="py-3 px-4 font-medium text-slate-700">${inTime.toLocaleDateString()}</td>
                         <td class="py-3 px-4 text-slate-600">${inTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
                         <td class="py-3 px-4 text-slate-600">${outTime ? outTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '<span class="text-emerald-500 font-bold">Active</span>'}</td>
-                        <td class="py-3 px-4 text-right font-bold text-slate-800">${s.duration.toFixed(2)}</td>
+                        <td class="py-3 px-4 text-right font-bold text-slate-800 flex justify-end items-center gap-2">
+                            ${s.duration.toFixed(2)}
+                            <button onclick="openEditTimesheet('${s.id}', '${uId}')" class="text-slate-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity no-print" title="Override Shift"><i class="ph ph-pencil-simple text-lg"></i></button>
+                        </td>
                     </tr>
+                    ${s.managerComment ? `<tr class="bg-amber-50 text-xs text-amber-800"><td colspan="4" class="px-4 py-1 italic border-b border-slate-200"><strong>Override Note:</strong> ${s.managerComment}</td></tr>` : ''}
                 `;
             });
             
             document.getElementById('ts-modal-total').textContent = total.toFixed(2) + ' hrs';
             openModal('timesheet-modal');
+        };
+
+        window.openEditTimesheet = (shiftId, uId) => {
+            const shift = window.tempTimesheetData[uId].find(s => s.id === shiftId);
+            if(!shift) return;
+            
+            document.getElementById('edit-ts-id').value = shift.id;
+            document.getElementById('edit-ts-uid').value = uId;
+            document.getElementById('edit-ts-name').value = document.getElementById('ts-modal-name').textContent;
+            
+            // Format ISO string to match HTML datetime-local input requirements
+            const formatForInput = (isoString) => {
+                if(!isoString) return '';
+                const d = new Date(isoString);
+                d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                return d.toISOString().slice(0, 16);
+            };
+            
+            document.getElementById('edit-ts-in').value = formatForInput(shift.clockIn);
+            document.getElementById('edit-ts-out').value = formatForInput(shift.clockOut);
+            document.getElementById('edit-ts-reason').value = shift.managerComment || '';
+            
+            // Swap modals safely
+            document.getElementById('timesheet-modal').classList.add('hidden');
+            document.getElementById('timesheet-edit-modal').classList.remove('hidden');
+            document.getElementById('timesheet-edit-modal').classList.add('flex');
+        };
+
+        window.closeEditTimesheetModal = () => {
+            document.getElementById('timesheet-edit-modal').classList.add('hidden');
+            document.getElementById('timesheet-edit-modal').classList.remove('flex');
+            document.getElementById('timesheet-modal').classList.remove('hidden');
+        };
+
+        window.saveTimesheetEdit = async () => {
+            const id = document.getElementById('edit-ts-id').value;
+            const uId = document.getElementById('edit-ts-uid').value;
+            const name = document.getElementById('edit-ts-name').value;
+            const inVal = document.getElementById('edit-ts-in').value;
+            const outVal = document.getElementById('edit-ts-out').value;
+            const reason = document.getElementById('edit-ts-reason').value.trim();
+            
+            if(!inVal) return showToast("Clock In time is required.", "error");
+            if(!reason) return showToast("Manager comment is required for overrides.", "error");
+            
+            const clockInIso = new Date(inVal).toISOString();
+            const clockOutIso = outVal ? new Date(outVal).toISOString() : null;
+            
+            try {
+                await updateDoc(doc(timesheetsRef, id), {
+                    clockIn: clockInIso,
+                    clockOut: clockOutIso,
+                    managerComment: reason,
+                    overrideTimestamp: new Date().toISOString()
+                });
+                
+                showToast("Timesheet updated.", "success");
+                closeEditTimesheetModal();
+                
+                // Refresh data and reopen the exact view seamlessly
+                await fetchTimesheets();
+                viewTimesheetDetail(uId, name);
+                
+            } catch (e) {
+                showToast("Error saving timesheet.", "error");
+            }
         };
 
         // --- PULL-SHEET LOGIC ---

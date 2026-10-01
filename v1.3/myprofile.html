@@ -293,6 +293,9 @@
                     let duration = 0;
                     if(t.clockOut) {
                         duration = (new Date(t.clockOut) - inDate) / (1000 * 60 * 60);
+                    } else {
+                        // Accrue time dynamically if still clocked in
+                        duration = (new Date() - inDate) / (1000 * 60 * 60);
                     }
                     weeklyTotal += duration;
                     shiftsToRender.push({ ...t, duration, inDate });
