@@ -514,6 +514,66 @@
                 </div>
             </section>
 
+            <!-- VIEW: SCHEDULES -->
+            <section id="view-schedules" class="view-section">
+                <div class="flex flex-col md:flex-row gap-6">
+                    <!-- Left: Schedule Form -->
+                    <div class="w-full md:w-1/3 bg-white rounded-xl shadow-sm border border-slate-200 p-6 h-fit">
+                        <h3 class="text-lg font-semibold text-slate-800 mb-4">Assign Shift</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Employee</label>
+                                <select id="sched-user" class="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"></select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Date</label>
+                                <input type="date" id="sched-date" class="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div class="flex gap-4">
+                                <div class="flex-1">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Start Time</label>
+                                    <input type="time" id="sched-start" class="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div class="flex-1">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">End Time</label>
+                                    <input type="time" id="sched-end" class="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                            </div>
+                            <button onclick="saveSchedule()" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-bold transition-colors shadow-sm mt-2">
+                                Add to Schedule
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right: Weekly Schedule View -->
+                    <div class="w-full md:w-2/3 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-[600px]">
+                        <div class="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-xl">
+                            <h3 class="text-lg font-semibold text-slate-800">Weekly Roster</h3>
+                            <div class="flex items-center gap-4">
+                                <button onclick="changeScheduleWeek(-1)" class="p-1 hover:bg-slate-200 rounded transition-colors"><i class="ph ph-caret-left text-xl"></i></button>
+                                <span id="schedule-week-label" class="font-medium text-slate-600 bg-white border border-slate-200 px-3 py-1 rounded">Week of ...</span>
+                                <button onclick="changeScheduleWeek(1)" class="p-1 hover:bg-slate-200 rounded transition-colors"><i class="ph ph-caret-right text-xl"></i></button>
+                            </div>
+                        </div>
+                        <div class="flex-1 overflow-y-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="bg-white border-b border-slate-200 sticky top-0 z-10">
+                                    <tr>
+                                        <th class="py-3 px-4 font-semibold text-sm text-slate-600">Date</th>
+                                        <th class="py-3 px-4 font-semibold text-sm text-slate-600">Employee</th>
+                                        <th class="py-3 px-4 font-semibold text-sm text-slate-600">Shift Time</th>
+                                        <th class="py-3 px-4 font-semibold text-sm text-slate-600 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="schedules-tbody" class="divide-y divide-slate-100">
+                                    <!-- JS Populated -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- VIEW: REPORTS -->
             <section id="view-reports" class="view-section">
                 <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-6">
@@ -882,6 +942,7 @@
         const receiptsRef = collection(db, 'artifacts', appId, 'public', 'data', 'receipts');
         const timeoffRef = collection(db, 'artifacts', appId, 'public', 'data', 'timeoff');
         const timesheetsRef = collection(db, 'artifacts', appId, 'public', 'data', 'timesheets');
+        const schedulesRef = collection(db, 'artifacts', appId, 'public', 'data', 'schedules');
 
         // App State
         let state = {
@@ -889,6 +950,7 @@
             users: [],
             receipts: [],
             timeoff: [],
+            schedules: [],
             currentReturnReceipt: null,
             returnSelections: new Set(),
             audit: {
@@ -1034,7 +1096,8 @@
                 'pricing': 'Quick-Toggle Event Pricing',
                 'reports': 'System Reports & Analytics',
                 'timeof': 'Time Off Requests & Approvals',
-                'timesheets': 'Weekly Labor Timesheets' // <--- New Title
+                'timesheets': 'Weekly Labor Timesheets',
+                'schedules': 'Staf Scheduling' // <--- New Title
             };
             document.getElementById('view-title').textContent = titles[viewId];
 
@@ -1058,6 +1121,10 @@
             if(viewId === 'timesheets') {
                 if(state.users.length === 0) await fetchUsers();
                 await fetchTimesheets();
+            }
+            if(viewId === 'schedules') {
+                if(state.users.length === 0) await fetchUsers();
+                await fetchSchedules();
             }
         };
 
@@ -1633,6 +1700,143 @@
                 
             } catch (e) {
                 showToast("Error saving timesheet.", "error");
+            }
+        };
+
+        // --- SCHEDULES LOGIC ---
+        let currentSchedWeekStart = new Date();
+        const schedDay = currentSchedWeekStart.getDay();
+        currentSchedWeekStart.setDate(currentSchedWeekStart.getDate() - schedDay + (schedDay === 0 ? -6 : 1));
+        currentSchedWeekStart.setHours(0,0,0,0);
+
+        window.changeScheduleWeek = (offset) => {
+            currentSchedWeekStart.setDate(currentSchedWeekStart.getDate() + (offset * 7));
+            renderSchedules();
+        };
+
+        window.fetchSchedules = async () => {
+            try {
+                const snapshot = await getDocs(schedulesRef);
+                state.schedules = [];
+                snapshot.forEach(doc => state.schedules.push({id: doc.id, ...doc.data()}));
+                
+                // Populate the employee select list
+                const select = document.getElementById('sched-user');
+                const currentSelection = select.value; // Remember who was selected if refreshing
+                select.innerHTML = '<option value="">Select Employee...</option>' + 
+                    state.users.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+                if (currentSelection) select.value = currentSelection;
+                    
+                renderSchedules();
+            } catch(e) {
+                showToast("Failed to load schedules", "error");
+            }
+        };
+
+        window.renderSchedules = () => {
+            const endOfWeek = new Date(currentSchedWeekStart);
+            endOfWeek.setDate(endOfWeek.getDate() + 6);
+            endOfWeek.setHours(23,59,59,999);
+            
+            document.getElementById('schedule-week-label').textContent = `${currentSchedWeekStart.toLocaleDateString()} - ${endOfWeek.toLocaleDateString()}`;
+            
+            const tbody = document.getElementById('schedules-tbody');
+            tbody.innerHTML = '';
+            
+            // Filter and sort shifts for the selected week using local timezone splitting
+            const weeklyShifts = state.schedules.filter(s => {
+                if(!s.date) return false;
+                const [y, m, d] = s.date.split('-');
+                const shiftDate = new Date(y, m - 1, d, 12, 0, 0); // Force noon local time for stable comparison
+                return shiftDate >= currentSchedWeekStart && shiftDate <= endOfWeek;
+            }).sort((a, b) => {
+                // Sort chronologically by date, then by start time
+                if (a.date === b.date) return a.shiftStart.localeCompare(b.shiftStart);
+                return a.date.localeCompare(b.date);
+            });
+            
+            if (weeklyShifts.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-500">No shifts scheduled for this week.</td></tr>`;
+                return;
+            }
+
+            // Convert raw 14:00 to 2:00 PM
+            const formatTime = (time24) => {
+                if(!time24) return '';
+                const [h, m] = time24.split(':');
+                const d = new Date(); d.setHours(h, m);
+                return d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            };
+
+            weeklyShifts.forEach(shift => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors group";
+                
+                const [y, m, d] = shift.date.split('-');
+                const displayDate = new Date(y, m-1, d).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-medium text-slate-700">${displayDate}</td>
+                    <td class="py-3 px-4 font-bold text-slate-800">${shift.name}</td>
+                    <td class="py-3 px-4 text-emerald-600 font-medium">${formatTime(shift.shiftStart)} - ${formatTime(shift.shiftEnd)}</td>
+                    <td class="py-3 px-4 text-right">
+                        <button onclick="deleteSchedule('${shift.id}')" class="text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove Shift"><i class="ph ph-trash text-lg"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        };
+
+        window.saveSchedule = async () => {
+            const userId = document.getElementById('sched-user').value;
+            const date = document.getElementById('sched-date').value;
+            const shiftStart = document.getElementById('sched-start').value;
+            const shiftEnd = document.getElementById('sched-end').value;
+            
+            if(!userId || !date || !shiftStart || !shiftEnd) {
+                return showToast("All fields are required to assign a shift.", "error");
+            }
+            
+            const user = state.users.find(u => u.id === userId);
+            if(!user) return;
+
+            const shiftData = {
+                userId: user.id,
+                name: user.name,
+                date: date,
+                shiftStart: shiftStart,
+                shiftEnd: shiftEnd,
+                createdAt: new Date().toISOString()
+            };
+            
+            try {
+                const newRef = doc(schedulesRef);
+                await setDoc(newRef, shiftData);
+                
+                state.schedules.push({ id: newRef.id, ...shiftData });
+                
+                // Clear dates and times, but leave the employee selected for rapid building
+                document.getElementById('sched-date').value = '';
+                document.getElementById('sched-start').value = '';
+                document.getElementById('sched-end').value = '';
+                
+                renderSchedules();
+                showToast("Shift added to schedule.", "success");
+            } catch (e) {
+                showToast("Failed to save schedule.", "error");
+            }
+        };
+
+        window.deleteSchedule = async (id) => {
+            if(!confirm("Are you sure you want to delete this shift?")) return;
+            
+            try {
+                await deleteDoc(doc(schedulesRef, id));
+                state.schedules = state.schedules.filter(s => s.id !== id);
+                renderSchedules();
+                showToast("Shift removed.", "success");
+            } catch(e) {
+                showToast("Failed to delete shift.", "error");
             }
         };
 
