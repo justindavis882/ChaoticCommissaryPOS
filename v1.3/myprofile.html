@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Portal | Chaotic Commissary</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #0f172a; }
+        .screen { display: none; }
+        .screen.active { display: flex; }
+        #toast { transition: all 0.3s; transform: translateY(100px) translateX(-50%); opacity: 0; }
+        #toast.show { transform: translateY(0) translateX(-50%); opacity: 1; }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden relative">
+
+    <!-- 1. LOCK SCREEN -->
+    <div id="screen-lock" class="screen active h-full w-full bg-slate-900 flex-col justify-center items-center absolute inset-0 z-50">
+        <div class="text-center bg-slate-800 p-10 rounded-xl shadow-2xl border border-slate-700 w-96">
+            <i class="ph-fill ph-identification-badge text-5xl text-emerald-400 mb-4 inline-block"></i>
+            <h1 class="text-3xl font-bold text-white mb-2">STAFF PORTAL</h1>
+            <p class="text-slate-400 mb-8 text-sm">Enter your PIN to access your profile</p>
+            
+            <input type="password" id="pin-input" class="w-full text-center text-3xl p-4 rounded-lg tracking-[0.5em] mb-4 bg-slate-900 text-emerald-400 border-2 border-slate-600 focus:border-emerald-500 outline-none font-mono" placeholder="••••">
+            
+            <div class="text-sm text-slate-500 mt-4">
+                [ENTER] to Login<br>
+                <button class="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded transition-colors" onclick="window.location.href='index.html'">Return to Gateway</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. DASHBOARD SCREEN -->
+    <div id="screen-dashboard" class="screen h-full w-full flex-col bg-slate-50 overflow-y-auto">
+        <header class="bg-slate-900 text-white p-6 shadow-md flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold" id="profile-name">Employee Portal</h1>
+                <p class="text-emerald-400 text-sm font-medium" id="profile-dept">Department</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="text-right">
+                    <div id="clock-display" class="font-mono text-xl font-bold">00:00:00</div>
+                    <div id="date-display" class="text-xs text-slate-400">Date</div>
+                </div>
+                <button onclick="logout()" class="bg-slate-800 hover:bg-slate-700 p-3 rounded-lg transition-colors"><i class="ph ph-sign-out text-xl"></i></button>
+            </div>
+        </header>
+
+        <div class="p-8 max-w-6xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            <!-- TIMECLOCK -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col items-center justify-center py-10">
+                <h2 class="text-lg font-bold text-slate-800 mb-6 w-full text-left border-b border-slate-100 pb-2">Timeclock</h2>
+                <div id="clock-status" class="text-slate-500 font-medium mb-4 text-center">Currently: <span class="font-bold text-slate-800">Clocked Out</span></div>
+                <button id="btn-clock" onclick="toggleClock()" class="w-64 h-20 rounded-xl font-bold text-2xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg transition-all">
+                    CLOCK IN
+                </button>
+            </div>
+
+            <!-- SCHEDULE -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">My Upcoming Shifts</h2>
+                <div id="schedule-list" class="space-y-3">
+                    <div class="text-slate-400 text-sm italic">Loading shifts...</div>
+                </div>
+            </div>
+
+            <!-- CONTACT INFO -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">Contact Details</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1">Phone Number</label>
+                        <input type="tel" id="info-phone" class="w-full px-3 py-2 border border-slate-300 rounded focus:ring-emerald-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1">Email Address</label>
+                        <input type="email" id="info-email" class="w-full px-3 py-2 border border-slate-300 rounded focus:ring-emerald-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1">Emergency Contact</label>
+                        <input type="text" id="info-emergency" class="w-full px-3 py-2 border border-slate-300 rounded focus:ring-emerald-500 outline-none">
+                    </div>
+                    <button onclick="updateContactInfo()" class="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded font-medium transition-colors text-sm">Save Information</button>
+                </div>
+            </div>
+
+            <!-- TIME OFF REQUEST -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">Request Time Off</h2>
+                <div class="space-y-4">
+                    <div class="flex gap-4">
+                        <div class="flex-1">
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Start Date</label>
+                            <input type="date" id="pto-start" class="w-full px-3 py-2 border border-slate-300 rounded outline-none">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-xs font-medium text-slate-500 mb-1">End Date</label>
+                            <input type="date" id="pto-end" class="w-full px-3 py-2 border border-slate-300 rounded outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1">Reason</label>
+                        <input type="text" id="pto-reason" placeholder="e.g. Family Vacation" class="w-full px-3 py-2 border border-slate-300 rounded outline-none">
+                    </div>
+                    <button onclick="submitTimeOff()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded font-medium transition-colors text-sm">Submit Request</button>
+                </div>
+                
+                <h3 class="text-sm font-bold text-slate-700 mt-6 mb-2">Pending Requests</h3>
+                <div id="pto-list" class="space-y-2 text-sm">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Toast -->
+    <div id="toast" class="fixed bottom-6 left-1/2 bg-slate-800 text-white px-6 py-3 rounded-xl shadow-2xl font-medium z-50 flex items-center gap-3">
+        <span id="toast-msg">Message</span>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, getDocs, setDoc, query, where, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-pos-app';
+        const firebaseConfig = {
+            apiKey: "AIzaSyDuFg74Dvh8FydVdnvKlhShWTHq7SZASC0",
+            authDomain: "chaotic-commissary.firebaseapp.com",
+            projectId: "chaotic-commissary",
+            storageBucket: "chaotic-commissary.firebasestorage.app",
+            messagingSenderId: "282428310882",
+            appId: "1:282428310882:web:226ebc367cc69c296cd83b"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        const accountsRef = collection(db, 'artifacts', appId, 'public', 'data', 'accounts');
+        const timesheetsRef = collection(db, 'artifacts', appId, 'public', 'data', 'timesheets');
+        const schedulesRef = collection(db, 'artifacts', appId, 'public', 'data', 'schedules');
+        const timeoffRef = collection(db, 'artifacts', appId, 'public', 'data', 'timeoff');
+
+        let currentUser = null;
+        let activeTimesheet = null;
+
+        window.showToast = (msg, isError = false) => {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').textContent = msg;
+            toast.className = `fixed bottom-6 left-1/2 text-white px-6 py-3 rounded-xl shadow-2xl font-medium z-50 flex items-center gap-3 ${isError ? 'bg-red-600' : 'bg-slate-800'}`;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        };
+
+        async function initApp() {
+            await signInAnonymously(auth);
+            document.getElementById('pin-input').focus();
+            setInterval(updateTime, 1000);
+        }
+
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('clock-display').textContent = now.toLocaleTimeString();
+            document.getElementById('date-display').textContent = now.toLocaleDateString();
+        }
+
+        document.getElementById('pin-input').addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                const pin = e.target.value.trim();
+                e.target.value = '';
+                if (!pin) return;
+
+                const snapshot = await getDocs(accountsRef);
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.pin === pin) currentUser = { id: doc.id, ...data };
+                });
+
+                if (currentUser) {
+                    document.getElementById('screen-lock').classList.remove('active');
+                    document.getElementById('screen-dashboard').classList.add('active');
+                    document.getElementById('profile-name').textContent = currentUser.name;
+                    document.getElementById('profile-dept').textContent = currentUser.department || 'Staff';
+                    
+                    // Populate info
+                    document.getElementById('info-phone').value = currentUser.phone || '';
+                    document.getElementById('info-email').value = currentUser.email || '';
+                    document.getElementById('info-emergency').value = currentUser.emergency || '';
+
+                    loadProfileData();
+                } else {
+                    showToast("Invalid PIN", true);
+                }
+            }
+        });
+
+        async function loadProfileData() {
+            // Check active clock status
+            const tsSnap = await getDocs(query(timesheetsRef, where("userId", "==", currentUser.id), where("clockOut", "==", null)));
+            if (!tsSnap.empty) {
+                activeTimesheet = { id: tsSnap.docs[0].id, ...tsSnap.docs[0].data() };
+                setClockUI(true);
+            } else {
+                activeTimesheet = null;
+                setClockUI(false);
+            }
+
+            // Load Shifts
+            const schedSnap = await getDocs(query(schedulesRef, where("userId", "==", currentUser.id)));
+            const schedList = document.getElementById('schedule-list');
+            schedList.innerHTML = '';
+            
+            const shifts = [];
+            schedSnap.forEach(d => shifts.push(d.data()));
+            shifts.sort((a,b) => new Date(a.date) - new Date(b.date));
+            
+            if(shifts.length === 0) schedList.innerHTML = '<div class="text-slate-400 text-sm">No upcoming shifts.</div>';
+            shifts.forEach(s => {
+                schedList.innerHTML += `<div class="flex justify-between bg-slate-50 p-2 border border-slate-200 rounded text-sm">
+                    <span class="font-bold">${new Date(s.date).toLocaleDateString()}</span>
+                    <span class="text-slate-600">${s.shiftStart} - ${s.shiftEnd}</span>
+                </div>`;
+            });
+
+            // Load Time Off
+            const ptoSnap = await getDocs(query(timeoffRef, where("userId", "==", currentUser.id)));
+            const ptoList = document.getElementById('pto-list');
+            ptoList.innerHTML = '';
+            ptoSnap.forEach(d => {
+                const data = d.data();
+                const statusColor = data.status === 'Approved' ? 'text-emerald-600' : data.status === 'Denied' ? 'text-red-600' : 'text-amber-600';
+                ptoList.innerHTML += `<div class="flex justify-between bg-slate-50 p-2 border border-slate-200 rounded text-sm">
+                    <span>${data.startDate} to ${data.endDate}</span>
+                    <span class="font-bold ${statusColor}">${data.status}</span>
+                </div>`;
+            });
+        }
+
+        function setClockUI(isClockedIn) {
+            const btn = document.getElementById('btn-clock');
+            const status = document.getElementById('clock-status');
+            if(isClockedIn) {
+                btn.textContent = 'CLOCK OUT';
+                btn.className = 'w-64 h-20 rounded-xl font-bold text-2xl text-white bg-red-600 hover:bg-red-700 shadow-lg transition-all';
+                status.innerHTML = `Currently: <span class="font-bold text-emerald-600">Clocked In</span>`;
+            } else {
+                btn.textContent = 'CLOCK IN';
+                btn.className = 'w-64 h-20 rounded-xl font-bold text-2xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg transition-all';
+                status.innerHTML = `Currently: <span class="font-bold text-slate-800">Clocked Out</span>`;
+            }
+        }
+
+        window.toggleClock = async () => {
+            if (activeTimesheet) {
+                // Clock Out
+                await updateDoc(doc(timesheetsRef, activeTimesheet.id), { clockOut: new Date().toISOString() });
+                activeTimesheet = null;
+                setClockUI(false);
+                showToast("Clocked out successfully");
+            } else {
+                // Clock In
+                const newRef = doc(timesheetsRef);
+                const data = { userId: currentUser.id, name: currentUser.name, clockIn: new Date().toISOString(), clockOut: null };
+                await setDoc(newRef, data);
+                activeTimesheet = { id: newRef.id, ...data };
+                setClockUI(true);
+                showToast("Clocked in successfully");
+            }
+        };
+
+        window.updateContactInfo = async () => {
+            const phone = document.getElementById('info-phone').value;
+            const email = document.getElementById('info-email').value;
+            const emergency = document.getElementById('info-emergency').value;
+            
+            await updateDoc(doc(accountsRef, currentUser.id), { phone, email, emergency });
+            showToast("Contact info updated");
+        };
+
+        window.submitTimeOff = async () => {
+            const startDate = document.getElementById('pto-start').value;
+            const endDate = document.getElementById('pto-end').value;
+            const reason = document.getElementById('pto-reason').value;
+
+            if(!startDate || !endDate) return showToast("Select dates", true);
+
+            await setDoc(doc(timeoffRef), {
+                userId: currentUser.id,
+                name: currentUser.name,
+                startDate, endDate, reason,
+                status: 'Pending',
+                submittedAt: new Date().toISOString()
+            });
+            
+            document.getElementById('pto-start').value = '';
+            document.getElementById('pto-end').value = '';
+            document.getElementById('pto-reason').value = '';
+            showToast("Request submitted");
+            loadProfileData();
+        };
+
+        window.logout = () => {
+            currentUser = null;
+            document.getElementById('screen-dashboard').classList.remove('active');
+            document.getElementById('screen-lock').classList.add('active');
+            const pinInput = document.getElementById('pin-input');
+            pinInput.value = '';
+            pinInput.focus();
+        };
+
+        initApp();
+    </script>
+</body>
+</html>
