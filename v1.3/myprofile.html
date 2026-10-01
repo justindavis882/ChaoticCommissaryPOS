@@ -231,13 +231,22 @@
             const ptoSnap = await getDocs(query(timeoffRef, where("userId", "==", currentUser.id)));
             const ptoList = document.getElementById('pto-list');
             ptoList.innerHTML = '';
+            
             ptoSnap.forEach(d => {
                 const data = d.data();
-                const statusColor = data.status === 'Approved' ? 'text-emerald-600' : data.status === 'Denied' ? 'text-red-600' : 'text-amber-600';
-                ptoList.innerHTML += `<div class="flex justify-between bg-slate-50 p-2 border border-slate-200 rounded text-sm">
-                    <span>${data.startDate} to ${data.endDate}</span>
-                    <span class="font-bold ${statusColor}">${data.status}</span>
-                </div>`;
+                const statusColor = data.status === 'Approved' ? 'text-emerald-600' : 
+                                    data.status === 'Denied' ? 'text-red-600' : 'text-amber-600';
+                
+                ptoList.innerHTML += `
+                    <div class="bg-slate-50 p-3 border border-slate-200 rounded text-sm flex flex-col gap-1">
+                        <div class="flex justify-between items-center">
+                            <span class="font-medium">${data.startDate} to ${data.endDate}</span>
+                            <span class="font-bold ${statusColor}">${data.status}</span>
+                        </div>
+                        <div class="text-xs text-slate-500">Reason: ${data.reason}</div>
+                        ${data.managerComment ? `<div class="mt-2 text-xs text-slate-600 bg-white p-2 border border-slate-100 rounded italic"><strong>Manager Note:</strong> ${data.managerComment}</div>` : ''}
+                    </div>
+                `;
             });
         }
 
