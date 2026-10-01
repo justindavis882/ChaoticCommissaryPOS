@@ -249,31 +249,31 @@
     <!-- 4. INVENTORY SCREEN -->
     <div id="screen-inventory" class="screen p-6 flex-col gap-4">
         <div class="flex justify-between items-end mb-2">
-            <h1 class="text-3xl font-bold text-blue-400">INVENTORY MANAGEMENT</h1>
+            <h1 class="text-3xl font-bold text-blue-400">ITEM SEARCH</h1>
             <div class="text-sm text-slate-400 space-x-4">
                 <span><kbd class="bg-slate-800 px-1 rounded border border-slate-600">↑↓</kbd> Navigate</span>
-                <span><kbd class="bg-slate-800 px-1 rounded border border-slate-600">ESC</kbd> Back</span>
                 <span><kbd class="bg-slate-800 px-1 rounded border border-slate-600">ENTER</kbd> Add to Sale</span>
+                <span><kbd class="bg-slate-800 px-1 rounded border border-slate-600">ESC</kbd> Back to Register</span>
+            </div>
+        </div>
+
+        <div class="mb-2 relative">
+            <input type="text" id="pos-item-search" class="w-full pl-4 pr-4 py-4 bg-slate-800 border-2 border-slate-600 rounded-xl text-lg text-white focus:outline-none focus:border-blue-500 shadow-sm" placeholder="Search by name or SKU..." oninput="inventorySelectedIndex = 0; renderPOSInventory(this.value)">
         </div>
 
         <div class="flex-1 bg-slate-800 rounded-xl border border-slate-700 overflow-hidden flex flex-col relative">
             <table class="w-full text-left border-collapse">
-                <thead>
-                    <tr class="bg-slate-900 border-b border-slate-700 text-slate-400">
+                <thead class="bg-slate-900 border-b border-slate-700 text-slate-400 sticky top-0">
+                    <tr>
                         <th class="p-4 w-1/4">SKU</th>
                         <th class="p-4 w-1/2">NAME</th>
                         <th class="p-4 w-1/4 text-right">PRICE</th>
                     </tr>
                 </thead>
+                <tbody id="pos-inventory-list" class="divide-y divide-slate-700">
+                    <!-- Populated via JS -->
+                </tbody>
             </table>
-            <div class="flex-1 overflow-y-auto">
-                <table class="w-full text-left border-collapse">
-                    <tbody id="inventory-list">
-                        <!-- Populated via JS -->
-                    </tbody>
-                </table>
-            </div>
-
         </div>
     </div>
 
@@ -407,7 +407,7 @@
                     }
                 }
                 
-                renderInventoryList();
+                renderPOSInventory();
             } catch (e) {
                 console.error("Inventory fetch error:", e);
                 showToast("Failed to load inventory", true);
@@ -430,7 +430,7 @@
                 renderCart();
             } else if (screenId === 'inventory') {
                 inventorySelectedIndex = 0;
-                renderInventoryList();
+                renderPOSInventory();
             } else if (screenId === 'payment') {
                 resetPaymentScreen();
             }
@@ -451,15 +451,14 @@
             } else if (currentScreen === 'register') {
                 document.getElementById('sku-input').focus();
             } else if (currentScreen === 'payment' && currentPaymentType !== null) {
-                // Focus payment input if a tender is active
                 if (document.getElementById('payment-check-input').classList.contains('hidden') === false) {
-                     // Check input takes priority if visible
                      document.getElementById('payment-check-input').focus();
                 } else {
                      document.getElementById('payment-amount-input').focus();
                 }
-            } else if (currentScreen === 'inventory' && invFormMode !== null) {
-                // Focus is trapped in the form, handled in form logic
+            } else if (currentScreen === 'inventory') {
+                const searchBox = document.getElementById('pos-item-search');
+                if (searchBox) searchBox.focus();
             }
         }
 
@@ -545,6 +544,11 @@
                 return;
             }
             if (e.key === 'Escape') {
+                if (cart.length > 0) {
+                    if (!confirm("Are you sure you want to void the current transaction and lock the register?")) {
+                        return; // Cancel the exit
+                    }
+                }
                 cart = []; // clear session
                 switchScreen('lock');
                 return;
@@ -913,46 +917,77 @@
             }
         }
 
-        function renderInventoryList() {
-            const tbody = document.getElementById('inventory-list');
-            tbody.innerHTML = '';
+        let filteredInventory = [];
+
+        function renderPOSInventory(filterStr = '') {
+            const tbody = document.getElementById('pos-inventory-list');
+            if (!tbody) return;
             
-            inventoryData.forEach((item, index) => {
+            tbody.innerHTML = '';
+            const searchLower = filterStr.toLowerCase();
+            
+            filteredInventory = inventoryData.filter(i => 
+                i.sku.toLowerCase().includes(searchLower) || 
+                i.name.toLowerCase().includes(searchLower)
+            );
+
+            // Ensure arrow selection doesn't break if search results narrow down
+            if (inventorySelectedIndex >= filteredInventory.length) {
+                inventorySelectedIndex = Math.max(0, filteredInventory.length - 1);
+            }
+
+            filteredInventory.forEach((item, index) => {
                 const tr = document.createElement('tr');
-                tr.className = `border-b border-slate-700 ${index === inventorySelectedIndex ? 'selected-row' : 'text-slate-300'}`;
+                tr.className = `border-b border-slate-700 cursor-pointer ${index === inventorySelectedIndex ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-700'}`;
+                
+                // Allow clicking with a mouse/touchscreen as a fallback
+                tr.onclick = () => {
+                    processBarcode(item.sku);
+                    document.getElementById('pos-item-search').value = '';
+                    switchScreen('register');
+                };
+                
                 tr.innerHTML = `
-                    <td class="p-4 w-1/4">${item.sku}</td>
-                    <td class="p-4 w-1/2">${item.name}</td>
-                    <td class="p-4 w-1/4 text-right">${formatMoney(item.price)}</td>
+                    <td class="p-4 w-1/4 font-mono">${item.sku}</td>
+                    <td class="p-4 w-1/2 font-medium">${item.name}</td>
+                    <td class="p-4 w-1/4 text-right font-bold">${formatMoney(item.price)}</td>
                 `;
                 tbody.appendChild(tr);
             });
 
-            // Ensure selected item is scrolled into view
             const selectedEl = tbody.children[inventorySelectedIndex];
             if (selectedEl) selectedEl.scrollIntoView({ block: 'nearest' });
         }
 
         function handleInventoryInput(e) {
-            // Navigation
+            const searchBox = document.getElementById('pos-item-search');
+            
             if (e.key === 'ArrowDown') {
-                if (inventorySelectedIndex < inventoryData.length - 1) {
+                e.preventDefault();
+                if (inventorySelectedIndex < filteredInventory.length - 1) {
                     inventorySelectedIndex++;
-                    renderInventoryList();
+                    renderPOSInventory(searchBox.value);
                 }
             } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
                 if (inventorySelectedIndex > 0) {
                     inventorySelectedIndex--;
-                    renderInventoryList();
+                    renderPOSInventory(searchBox.value);
                 }
             } else if (e.key === 'Enter') {
-                if (inventoryData.length > 0 && inventoryData[inventorySelectedIndex]) {
-                    processBarcode(inventoryData[inventorySelectedIndex].sku);
-                    showToast(`Added ${inventoryData[inventorySelectedIndex].name} to sale`);
+                e.preventDefault();
+                if (filteredInventory.length > 0 && filteredInventory[inventorySelectedIndex]) {
+                    processBarcode(filteredInventory[inventorySelectedIndex].sku);
+                    showToast(`Added ${filteredInventory[inventorySelectedIndex].name} to sale`);
+                    searchBox.value = ''; // Clear search for next time
+                    switchScreen('register'); // Jump back to register automatically
                 }
             } else if (e.key === 'Escape') {
+                e.preventDefault();
+                searchBox.value = ''; // Clear search
+                switchScreen('register'); // Go back without adding anything
             }
-        };
+        }
 
         // Boot
         window.addEventListener('DOMContentLoaded', initApp);
