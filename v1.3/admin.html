@@ -545,30 +545,25 @@
                         </div>
                     </div>
 
-                    <!-- Right: Weekly Schedule View -->
-                    <div class="w-full md:w-2/3 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-[600px]">
-                        <div class="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-xl">
-                            <h3 class="text-lg font-semibold text-slate-800">Weekly Roster</h3>
+                    <!-- Right: Weekly Calendar View -->
+                    <div class="w-full md:w-2/3 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-[600px] overflow-hidden">
+                        <div class="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                            <h3 class="text-lg font-semibold text-slate-800">Weekly Calendar</h3>
                             <div class="flex items-center gap-4">
                                 <button onclick="changeScheduleWeek(-1)" class="p-1 hover:bg-slate-200 rounded transition-colors"><i class="ph ph-caret-left text-xl"></i></button>
                                 <span id="schedule-week-label" class="font-medium text-slate-600 bg-white border border-slate-200 px-3 py-1 rounded">Week of ...</span>
                                 <button onclick="changeScheduleWeek(1)" class="p-1 hover:bg-slate-200 rounded transition-colors"><i class="ph ph-caret-right text-xl"></i></button>
                             </div>
                         </div>
-                        <div class="flex-1 overflow-y-auto">
-                            <table class="w-full text-left border-collapse">
-                                <thead class="bg-white border-b border-slate-200 sticky top-0 z-10">
-                                    <tr>
-                                        <th class="py-3 px-4 font-semibold text-sm text-slate-600">Date</th>
-                                        <th class="py-3 px-4 font-semibold text-sm text-slate-600">Employee</th>
-                                        <th class="py-3 px-4 font-semibold text-sm text-slate-600">Shift Time</th>
-                                        <th class="py-3 px-4 font-semibold text-sm text-slate-600 text-right">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="schedules-tbody" class="divide-y divide-slate-100">
-                                    <!-- JS Populated -->
-                                </tbody>
-                            </table>
+                        
+                        <!-- Calendar Grid Header -->
+                        <div class="grid grid-cols-7 bg-slate-100 border-b border-slate-200 text-center" id="calendar-headers">
+                            <!-- JS Populated -->
+                        </div>
+                        
+                        <!-- Calendar Grid Body (Drop Zones) -->
+                        <div class="grid grid-cols-7 flex-1 overflow-y-auto bg-slate-50 divide-x divide-slate-200" id="calendar-body">
+                            <!-- JS Populated -->
                         </div>
                     </div>
                 </div>
@@ -1733,6 +1728,8 @@
             }
         };
 
+        window.copiedShift = null; // Global clipboard for shifts
+
         window.renderSchedules = () => {
             const endOfWeek = new Date(currentSchedWeekStart);
             endOfWeek.setDate(endOfWeek.getDate() + 6);
@@ -1740,27 +1737,11 @@
             
             document.getElementById('schedule-week-label').textContent = `${currentSchedWeekStart.toLocaleDateString()} - ${endOfWeek.toLocaleDateString()}`;
             
-            const tbody = document.getElementById('schedules-tbody');
-            tbody.innerHTML = '';
-            
-            // Filter and sort shifts for the selected week using local timezone splitting
-            const weeklyShifts = state.schedules.filter(s => {
-                if(!s.date) return false;
-                const [y, m, d] = s.date.split('-');
-                const shiftDate = new Date(y, m - 1, d, 12, 0, 0); // Force noon local time for stable comparison
-                return shiftDate >= currentSchedWeekStart && shiftDate <= endOfWeek;
-            }).sort((a, b) => {
-                // Sort chronologically by date, then by start time
-                if (a.date === b.date) return a.shiftStart.localeCompare(b.shiftStart);
-                return a.date.localeCompare(b.date);
-            });
-            
-            if (weeklyShifts.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-500">No shifts scheduled for this week.</td></tr>`;
-                return;
-            }
+            const headers = document.getElementById('calendar-headers');
+            const body = document.getElementById('calendar-body');
+            headers.innerHTML = '';
+            body.innerHTML = '';
 
-            // Convert raw 14:00 to 2:00 PM
             const formatTime = (time24) => {
                 if(!time24) return '';
                 const [h, m] = time24.split(':');
@@ -1768,23 +1749,116 @@
                 return d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             };
 
-            weeklyShifts.forEach(shift => {
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50 transition-colors group";
+            // Generate the 7 day columns
+            for (let i = 0; i < 7; i++) {
+                const currentDay = new Date(currentSchedWeekStart);
+                currentDay.setDate(currentDay.getDate() + i);
+                // Format ISO date safely
+                const dateStr = `${currentDay.getFullYear()}-${String(currentDay.getMonth()+1).padStart(2, '0')}-${String(currentDay.getDate()).padStart(2, '0')}`;
                 
-                const [y, m, d] = shift.date.split('-');
-                const displayDate = new Date(y, m-1, d).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-
-                tr.innerHTML = `
-                    <td class="py-3 px-4 font-medium text-slate-700">${displayDate}</td>
-                    <td class="py-3 px-4 font-bold text-slate-800">${shift.name}</td>
-                    <td class="py-3 px-4 text-emerald-600 font-medium">${formatTime(shift.shiftStart)} - ${formatTime(shift.shiftEnd)}</td>
-                    <td class="py-3 px-4 text-right">
-                        <button onclick="deleteSchedule('${shift.id}')" class="text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove Shift"><i class="ph ph-trash text-lg"></i></button>
-                    </td>
+                // 1. Build Header
+                const th = document.createElement('div');
+                th.className = "py-2 text-sm font-semibold text-slate-700 flex flex-col justify-center items-center h-16";
+                th.innerHTML = `
+                    <span>${currentDay.toLocaleDateString([], {weekday: 'short'})}</span>
+                    <span class="text-xs text-slate-400 font-normal">${currentDay.toLocaleDateString([], {month: 'numeric', day: 'numeric'})}</span>
+                    <button onclick="pasteShift('${dateStr}')" class="text-[10px] text-blue-600 hover:bg-blue-100 px-2 py-0.5 rounded mt-1 transition-colors ${window.copiedShift ? 'opacity-100' : 'opacity-0 pointer-events-none'}" title="Paste Copied Shift">
+                        <i class="ph ph-clipboard font-bold"></i> Paste
+                    </button>
                 `;
-                tbody.appendChild(tr);
-            });
+                headers.appendChild(th);
+
+                // 2. Build Body Drop Zone
+                const col = document.createElement('div');
+                col.className = "min-h-[450px] p-2 flex flex-col gap-2 transition-colors hover:bg-blue-50/50";
+                col.ondragover = (e) => e.preventDefault(); // Required to allow dropping
+                col.ondrop = (e) => dropShift(e, dateStr);
+
+                // Filter shifts for this exact date column
+                const dayShifts = state.schedules.filter(s => s.date === dateStr).sort((a,b) => a.shiftStart.localeCompare(b.shiftStart));
+                
+                dayShifts.forEach(shift => {
+                    const card = document.createElement('div');
+                    card.className = "bg-white p-2 rounded-lg border border-slate-200 shadow-sm text-xs cursor-grab hover:shadow-md hover:border-blue-300 transition-all group relative";
+                    card.draggable = true;
+                    card.ondragstart = (e) => dragShift(e, shift.id);
+                    
+                    card.innerHTML = `
+                        <div class="font-bold text-slate-800 truncate">${shift.name}</div>
+                        <div class="text-emerald-600 font-medium mt-0.5">${formatTime(shift.shiftStart)}</div>
+                        <div class="text-emerald-600 font-medium">${formatTime(shift.shiftEnd)}</div>
+                        
+                        <div class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 flex flex-col gap-1 bg-white p-1 rounded shadow-sm border border-slate-100 transition-opacity z-10">
+                            <button onclick="copyShift('${shift.id}')" class="text-slate-400 hover:text-blue-600 p-1" title="Copy Shift"><i class="ph ph-copy text-sm"></i></button>
+                            <button onclick="deleteSchedule('${shift.id}')" class="text-slate-400 hover:text-red-600 p-1" title="Remove Shift"><i class="ph ph-trash text-sm"></i></button>
+                        </div>
+                    `;
+                    col.appendChild(card);
+                });
+                body.appendChild(col);
+            }
+        };
+
+        // --- DRAG & DROP LOGIC ---
+        window.dragShift = (e, shiftId) => {
+            e.dataTransfer.setData("text/plain", shiftId);
+            e.dataTransfer.effectAllowed = "move";
+            // Slight delay to allow drag image to render before making origin translucent
+            setTimeout(() => e.target.classList.add('opacity-50'), 10);
+        };
+
+        window.dropShift = async (e, targetDateStr) => {
+            e.preventDefault();
+            const shiftId = e.dataTransfer.getData("text/plain");
+            if(!shiftId) return;
+            
+            // Remove translucent class from dragged element
+            const draggedEl = document.querySelector(`[draggable=true].opacity-50`);
+            if(draggedEl) draggedEl.classList.remove('opacity-50');
+
+            const shift = state.schedules.find(s => s.id === shiftId);
+            if(!shift || shift.date === targetDateStr) return; // Prevent unnecessary DB calls if dropped on same day
+            
+            try {
+                await updateDoc(doc(schedulesRef, shiftId), { date: targetDateStr });
+                shift.date = targetDateStr; // Update local state immediately
+                renderSchedules();
+            } catch(err) {
+                showToast("Error moving shift", "error");
+            }
+        };
+
+        // --- COPY & PASTE LOGIC ---
+        window.copyShift = (shiftId) => {
+            const shift = state.schedules.find(s => s.id === shiftId);
+            if(!shift) return;
+            
+            window.copiedShift = { ...shift };
+            renderSchedules(); // Triggers a re-render to reveal the "Paste" buttons on all days
+            showToast(`Copied ${shift.name}'s shift`, "info");
+        };
+
+        window.pasteShift = async (targetDateStr) => {
+            if(!window.copiedShift) return;
+            
+            const newShift = {
+                userId: window.copiedShift.userId,
+                name: window.copiedShift.name,
+                date: targetDateStr,
+                shiftStart: window.copiedShift.shiftStart,
+                shiftEnd: window.copiedShift.shiftEnd,
+                createdAt: new Date().toISOString()
+            };
+            
+            try {
+                const newRef = doc(schedulesRef);
+                await setDoc(newRef, newShift);
+                state.schedules.push({ id: newRef.id, ...newShift });
+                renderSchedules();
+                showToast("Shift pasted", "success");
+            } catch (e) {
+                showToast("Failed to paste shift", "error");
+            }
         };
 
         window.saveSchedule = async () => {
