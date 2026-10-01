@@ -114,6 +114,22 @@
 </head>
 <body class="flex h-screen overflow-hidden">
 
+    <!-- ADMIN LOCK SCREEN -->
+    <div id="admin-lock-screen" class="fixed inset-0 bg-slate-900 z-50 flex flex-col justify-center items-center transition-opacity duration-300">
+        <div class="text-center bg-slate-800 p-10 rounded-xl shadow-2xl border border-slate-700 w-96">
+            <i class="ph-fill ph-lock-key text-5xl text-blue-400 mb-4 inline-block"></i>
+            <h1 class="text-3xl font-bold text-white mb-2">ADMIN PORTAL</h1>
+            <p class="text-slate-400 mb-8 text-sm">Manager or Admin PIN required</p>
+            
+            <input type="password" id="admin-pin-input" class="w-full text-center text-3xl p-4 rounded-lg tracking-[0.5em] mb-4 bg-slate-900 text-blue-400 border-2 border-slate-600 focus:border-blue-500 outline-none font-mono" placeholder="••••">
+            
+            <div class="text-sm text-slate-500 mt-4">
+                [ENTER] to Unlock<br>
+                <button class="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded transition-colors" onclick="window.location.href='index.html'">Return to Gateway</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Sidebar -->
     <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col h-full shadow-xl z-10 flex-shrink-0">
         <div class="p-6 flex items-center gap-3 border-b border-slate-800">
@@ -740,7 +756,7 @@
 
         const formatMoney = (amt) => `$${parseFloat(amt).toFixed(2)}`;
 
-        // Init App
+        // Init App & Lock Screen Logic
         async function initApp() {
             try {
                 if (customAuthToken) {
@@ -749,23 +765,85 @@
                     await signInAnonymously(auth);
                 }
                 
-                // Fetch initial data based on default view
-                await fetchInventory();
-                window.switchView('inventory'); // force UI update
-                showToast("System connected successfully.", "success");
-
-                // Auto-refresh inventory every 3 minutes (180,000 ms)
-                setInterval(() => {
-                    if (!state.audit.active && document.getElementById('view-inventory').classList.contains('active')) {
-                        fetchInventory();
-                    }
-                }, 180000);
+                // Focus the PIN input immediately on load
+                const pinInput = document.getElementById('admin-pin-input');
+                if (pinInput) pinInput.focus();
 
             } catch (error) {
                 console.error("Init Error:", error);
                 showToast("Failed to connect to database.", "error");
             }
         }
+
+        // Handle Admin PIN Entry
+        document.getElementById('admin-pin-input').addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                const pinInput = e.target;
+                const pin = pinInput.value.trim();
+                if (!pin) return;
+
+                pinInput.disabled = true;
+                showToast("Verifying credentials...", "info");
+
+                try {
+                    const snapshot = await getDocs(accountsRef);
+                    let validAccount = null;
+
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        if (data.pin === pin) {
+                            validAccount = { id: doc.id, ...data };
+                        }
+                    });
+
+                    // Auto-seed default admin if database is empty
+                    if (snapshot.empty && pin === '1234') {
+                         const newAdmin = { name: "System Admin", department: "Admin", pin: "1234" };
+                         await setDoc(doc(accountsRef, "admin-user"), newAdmin);
+                         validAccount = { id: "admin-user", ...newAdmin };
+                    }
+
+                    if (validAccount) {
+                        const dept = (validAccount.department || '').toLowerCase();
+                        
+                        // Strict Role Gate
+                        if (dept === 'admin' || dept === 'manager') {
+                            
+                            // Fade out lock screen
+                            const lockScreen = document.getElementById('admin-lock-screen');
+                            lockScreen.classList.add('opacity-0', 'pointer-events-none');
+                            setTimeout(() => lockScreen.style.display = 'none', 300);
+                            
+                            showToast(`Welcome, ${validAccount.name}`, "success");
+                            
+                            // Initialize dashboard data now that user is verified
+                            await fetchInventory();
+                            window.switchView('inventory');
+                            
+                            // Start background refresh
+                            setInterval(() => {
+                                if (!state.audit.active && document.getElementById('view-inventory').classList.contains('active')) {
+                                    fetchInventory();
+                                }
+                            }, 180000);
+
+                        } else {
+                            showToast("Access Denied: Admin or Manager role required.", "error");
+                            pinInput.value = '';
+                        }
+                    } else {
+                        showToast("Invalid PIN.", "error");
+                        pinInput.value = '';
+                    }
+                } catch (err) {
+                    console.error("Login Error:", err);
+                    showToast("Database error during login.", "error");
+                } finally {
+                    pinInput.disabled = false;
+                    setTimeout(() => pinInput.focus(), 10);
+                }
+            }
+        });
 
         // Navigation Logic
         window.switchView = async (viewId) => {
