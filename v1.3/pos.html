@@ -252,11 +252,8 @@
             <h1 class="text-3xl font-bold text-blue-400">INVENTORY MANAGEMENT</h1>
             <div class="text-sm text-slate-400 space-x-4">
                 <span><kbd class="bg-slate-800 px-1 rounded border border-slate-600">↑↓</kbd> Navigate</span>
-                <span><kbd class="bg-slate-800 px-1 rounded border border-slate-600">N</kbd> New</span>
-                <span><kbd class="bg-slate-800 px-1 rounded border border-slate-600">E</kbd> Edit</span>
-                <span><kbd class="bg-slate-800 px-1 rounded border border-slate-600">DEL</kbd> Delete</span>
                 <span><kbd class="bg-slate-800 px-1 rounded border border-slate-600">ESC</kbd> Back</span>
-            </div>
+                <span><kbd class="bg-slate-800 px-1 rounded border border-slate-600">ENTER</kbd> Add to Sale</span>
         </div>
 
         <div class="flex-1 bg-slate-800 rounded-xl border border-slate-700 overflow-hidden flex flex-col relative">
@@ -277,31 +274,6 @@
                 </table>
             </div>
 
-            <!-- Form Overlay for CRUD -->
-            <div id="inventory-form-overlay" class="hidden absolute inset-0 bg-slate-900/90 backdrop-blur flex justify-center items-center z-10">
-                <div class="bg-slate-800 p-8 rounded-xl border border-slate-600 w-96 shadow-2xl">
-                    <h3 id="inv-form-title" class="text-2xl font-bold text-blue-400 mb-6">ADD ITEM</h3>
-                    
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-slate-400 text-sm mb-1">SKU</label>
-                            <input type="text" id="inv-sku" class="w-full p-2 rounded" placeholder="Barcode / SKU">
-                        </div>
-                        <div>
-                            <label class="block text-slate-400 text-sm mb-1">Name</label>
-                            <input type="text" id="inv-name" class="w-full p-2 rounded" placeholder="Item Name">
-                        </div>
-                        <div>
-                            <label class="block text-slate-400 text-sm mb-1">Price ($)</label>
-                            <input type="number" id="inv-price" class="w-full p-2 rounded text-right" step="0.01" placeholder="0.00">
-                        </div>
-                    </div>
-
-                    <div class="mt-8 text-sm text-slate-500 text-center">
-                        [ENTER] Save &nbsp;|&nbsp; [ESC] Cancel
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -361,7 +333,7 @@
         
         // UI Navigation State
         let inventorySelectedIndex = 0;
-        let invFormMode = null; // 'add' or 'edit'
+        // let invFormMode = null;
         let currentPaymentType = null; // 1: Cash, 2: Credit, 3: Check
         let pendingCreditAmount = null; // Store amount before card type
 
@@ -962,18 +934,6 @@
         }
 
         function handleInventoryInput(e) {
-            // If overlay is open, handle form inputs
-            if (invFormMode !== null) {
-                if (e.key === 'Escape') {
-                    closeInventoryForm();
-                } else if (e.key === 'Enter') {
-                    // Prevent default form submission if any
-                    e.preventDefault();
-                    saveInventoryItem();
-                }
-                return; // Stop processing list navigation keys
-            }
-
             // Navigation
             if (e.key === 'ArrowDown') {
                 if (inventorySelectedIndex < inventoryData.length - 1) {
@@ -985,98 +945,14 @@
                     inventorySelectedIndex--;
                     renderInventoryList();
                 }
+            } else if (e.key === 'Enter') {
+                if (inventoryData.length > 0 && inventoryData[inventorySelectedIndex]) {
+                    processBarcode(inventoryData[inventorySelectedIndex].sku);
+                    showToast(`Added ${inventoryData[inventorySelectedIndex].name} to sale`);
+                }
             } else if (e.key === 'Escape') {
-                switchScreen('register');
-            } else if (e.key.toLowerCase() === 'n') {
-                openInventoryForm('add');
-            } else if (e.key.toLowerCase() === 'e') {
-                if (inventoryData.length > 0) openInventoryForm('edit', inventoryData[inventorySelectedIndex]);
-            } else if (e.key === 'Delete') {
-                if (inventoryData.length > 0) deleteInventoryItem(inventoryData[inventorySelectedIndex]);
             }
-        }
-
-        function openInventoryForm(mode, item = null) {
-            invFormMode = mode;
-            document.getElementById('inventory-form-overlay').classList.remove('hidden');
-            
-            const skuInput = document.getElementById('inv-sku');
-            const nameInput = document.getElementById('inv-name');
-            const priceInput = document.getElementById('inv-price');
-            
-            document.getElementById('inv-form-title').textContent = mode === 'add' ? 'ADD ITEM' : 'EDIT ITEM';
-            
-            if (mode === 'edit' && item) {
-                skuInput.value = item.sku;
-                skuInput.disabled = true; // Cannot edit SKU once created in this basic version
-                skuInput.classList.add('opacity-50');
-                nameInput.value = item.name;
-                priceInput.value = item.price;
-                setTimeout(() => nameInput.focus(), 10);
-            } else {
-                skuInput.value = '';
-                skuInput.disabled = false;
-                skuInput.classList.remove('opacity-50');
-                nameInput.value = '';
-                priceInput.value = '';
-                setTimeout(() => skuInput.focus(), 10);
-            }
-        }
-
-        function closeInventoryForm() {
-            invFormMode = null;
-            document.getElementById('inventory-form-overlay').classList.add('hidden');
-            renderInventoryList(); // restore focus visually
-        }
-
-        async function saveInventoryItem() {
-            const sku = document.getElementById('inv-sku').value.trim();
-            const name = document.getElementById('inv-name').value.trim();
-            const price = parseFloat(document.getElementById('inv-price').value);
-
-            if (!sku || !name || isNaN(price)) {
-                showToast("Invalid inputs", true);
-                return;
-            }
-
-            const itemData = { sku, name, price };
-            
-            try {
-                await setDoc(doc(inventoryRef, sku), itemData);
-                
-                // Update local state
-                if (invFormMode === 'add') {
-                    inventoryData.push({ id: sku, ...itemData });
-                    inventorySelectedIndex = inventoryData.length - 1; // select new item
-                } else {
-                    const idx = inventoryData.findIndex(i => i.sku === sku);
-                    if (idx > -1) inventoryData[idx] = { id: sku, ...itemData };
-                }
-                
-                showToast("Item saved");
-                closeInventoryForm();
-            } catch (e) {
-                console.error("Save error", e);
-                showToast("Failed to save", true);
-            }
-        }
-
-        async function deleteInventoryItem(item) {
-            // Normally would use confirm(), but rules say strictly no alerts/confirms. 
-            // We will do direct delete with toast.
-            try {
-                await deleteDoc(doc(inventoryRef, item.sku));
-                inventoryData = inventoryData.filter(i => i.sku !== item.sku);
-                if (inventorySelectedIndex >= inventoryData.length) {
-                    inventorySelectedIndex = Math.max(0, inventoryData.length - 1);
-                }
-                renderInventoryList();
-                showToast(`Deleted ${item.name}`);
-            } catch (e) {
-                console.error("Delete error", e);
-                showToast("Failed to delete", true);
-            }
-        }
+        };
 
         // Boot
         window.addEventListener('DOMContentLoaded', initApp);
