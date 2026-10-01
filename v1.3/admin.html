@@ -97,7 +97,7 @@
             }
 
             /* 5. Standard Document Printers (8.5x11 Reports) */
-            #print-report-area {
+            #print-report-area, #print-timesheet-area {
                 display: block !important;
                 position: absolute;
                 left: 0;
@@ -146,6 +146,9 @@
             </button>
             <button onclick="switchView('schedules')" id="nav-schedules" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-slate-800 hover:text-white">
                 <i class="ph ph-calendar text-xl"></i> Schedules
+            </button>
+            <button onclick="switchView('timesheets')" id="nav-timesheets" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-slate-800 hover:text-white">
+                <i class="ph ph-clock text-xl"></i> Time Sheets
             </button>
             <button onclick="switchView('timeoff')" id="nav-timeoff" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-slate-800 hover:text-white">
                 <i class="ph ph-airplane-tilt text-xl"></i> Time Off Requests
@@ -479,6 +482,38 @@
                 </div>
             </section>
 
+            <!-- VIEW: TIMESHEETS -->
+            <section id="view-timesheets" class="view-section">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-800">Weekly Labor Report</h3>
+                        <div class="flex items-center gap-4 mt-2">
+                            <button onclick="changeTimesheetWeek(-1)" class="p-1 hover:bg-slate-200 rounded"><i class="ph ph-caret-left text-xl"></i></button>
+                            <span id="timesheet-week-label" class="font-medium text-slate-600 bg-slate-200 px-3 py-1 rounded">Week of ...</span>
+                            <button onclick="changeTimesheetWeek(1)" class="p-1 hover:bg-slate-200 rounded"><i class="ph ph-caret-right text-xl"></i></button>
+                        </div>
+                    </div>
+                    <button onclick="fetchTimesheets()" class="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm">
+                        <i class="ph ph-arrows-clockwise text-lg"></i> Refresh
+                    </button>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600">Employee</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600">Total Hours</th>
+                                <th class="py-3 px-4 font-semibold text-sm text-slate-600 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="timesheets-tbody" class="divide-y divide-slate-200">
+                            <!-- JS Populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
             <!-- VIEW: REPORTS -->
             <section id="view-reports" class="view-section">
                 <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-6">
@@ -670,6 +705,39 @@
             </div>
         </div>
 
+        <!-- Timesheet Print Modal -->
+        <div id="timesheet-modal" class="modal-content hidden bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-fadeIn">
+            <div class="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50 no-print">
+                <h3 class="font-bold text-lg text-slate-800">Review Timesheet</h3>
+                <div class="flex gap-2">
+                    <button onclick="window.print()" class="text-blue-600 hover:bg-blue-100 p-2 rounded transition-colors" title="Print"><i class="ph ph-printer text-xl"></i></button>
+                    <button onclick="closeModals()" class="text-slate-400 hover:text-slate-600 p-2"><i class="ph ph-x text-xl"></i></button>
+                </div>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-[60vh]" id="print-timesheet-area">
+                <div class="text-center border-b border-slate-300 pb-4 mb-4">
+                    <h2 class="text-2xl font-bold uppercase mb-1" id="ts-modal-name">Employee Name</h2>
+                    <p class="text-slate-500" id="ts-modal-week">Week of ...</p>
+                </div>
+                <table class="w-full text-left border-collapse mb-4">
+                    <thead class="bg-slate-100 border-b border-slate-200">
+                        <tr>
+                            <th class="py-2 px-4 font-semibold text-sm text-slate-600">Date</th>
+                            <th class="py-2 px-4 font-semibold text-sm text-slate-600">Clock In</th>
+                            <th class="py-2 px-4 font-semibold text-sm text-slate-600">Clock Out</th>
+                            <th class="py-2 px-4 font-semibold text-sm text-slate-600 text-right">Hours</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ts-modal-tbody" class="divide-y divide-slate-100">
+                    </tbody>
+                </table>
+                <div class="flex justify-between items-center font-bold text-lg border-t border-slate-300 pt-4">
+                    <span>Total Weekly Hours:</span>
+                    <span id="ts-modal-total">0.00</span>
+                </div>
+            </div>
+        </div>
+
         <!-- ID Print Modal -->
         <div id="id-modal" class="modal-content hidden bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-fadeIn">
             <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 no-print">
@@ -783,6 +851,7 @@
         const accountsRef = collection(db, 'artifacts', appId, 'public', 'data', 'accounts');
         const receiptsRef = collection(db, 'artifacts', appId, 'public', 'data', 'receipts');
         const timeoffRef = collection(db, 'artifacts', appId, 'public', 'data', 'timeoff');
+        const timesheetsRef = collection(db, 'artifacts', appId, 'public', 'data', 'timesheets');
 
         // App State
         let state = {
@@ -934,7 +1003,8 @@
                 'bundles': 'Virtual Bundle Builder',
                 'pricing': 'Quick-Toggle Event Pricing',
                 'reports': 'System Reports & Analytics',
-                'timeof': 'Time Off Requests & Approvals' // <--- New Title
+                'timeof': 'Time Off Requests & Approvals',
+                'timesheets': 'Weekly Labor Timesheets' // <--- New Title
             };
             document.getElementById('view-title').textContent = titles[viewId];
 
@@ -955,6 +1025,10 @@
                 renderPricingList();
             }
             if(viewId === 'timeoff') await fetchTimeOffRequests();
+            if(viewId === 'timesheets') {
+                if(state.users.length === 0) await fetchUsers();
+                await fetchTimesheets();
+            }
         };
 
         window.openModal = (modalId) => {
@@ -1346,6 +1420,118 @@
             } catch (e) {
                 showToast("Failed to update request", "error");
             }
+        };
+
+        // --- TIMESHEETS LOGIC ---
+        let currentTsWeekStart = new Date();
+        const currentDay = currentTsWeekStart.getDay();
+        currentTsWeekStart.setDate(currentTsWeekStart.getDate() - currentDay + (currentDay === 0 ? -6 : 1));
+        currentTsWeekStart.setHours(0,0,0,0);
+
+        window.tempTimesheetData = {}; // Stores shifts in memory for the modal
+
+        window.changeTimesheetWeek = (offset) => {
+            currentTsWeekStart.setDate(currentTsWeekStart.getDate() + (offset * 7));
+            fetchTimesheets();
+        };
+
+        window.fetchTimesheets = async () => {
+            const endOfWeek = new Date(currentTsWeekStart);
+            endOfWeek.setDate(endOfWeek.getDate() + 6);
+            endOfWeek.setHours(23,59,59,999);
+
+            document.getElementById('timesheet-week-label').textContent = `${currentTsWeekStart.toLocaleDateString()} - ${endOfWeek.toLocaleDateString()}`;
+
+            try {
+                const snapshot = await getDocs(timesheetsRef);
+                const allSheets = [];
+                snapshot.forEach(doc => allSheets.push({id: doc.id, ...doc.data()}));
+                
+                // Isolate to selected week
+                const weeklySheets = allSheets.filter(t => {
+                    if(!t.clockIn) return false;
+                    const d = new Date(t.clockIn);
+                    return d >= currentTsWeekStart && d <= endOfWeek;
+                });
+
+                // Group by User ID
+                const userTotals = {};
+                state.users.forEach(u => userTotals[u.id] = { name: u.name, hours: 0, shifts: [] });
+                
+                weeklySheets.forEach(t => {
+                    const uId = t.userId;
+                    if(!userTotals[uId]) userTotals[uId] = { name: t.name || 'Unknown', hours: 0, shifts: [] };
+                    
+                    let duration = 0;
+                    if(t.clockOut) {
+                        duration = (new Date(t.clockOut) - new Date(t.clockIn)) / (1000 * 60 * 60);
+                    }
+                    userTotals[uId].hours += duration;
+                    userTotals[uId].shifts.push({...t, duration});
+                });
+
+                const tbody = document.getElementById('timesheets-tbody');
+                tbody.innerHTML = '';
+                window.tempTimesheetData = {};
+                
+                Object.keys(userTotals).forEach(uId => {
+                    const data = userTotals[uId];
+                    if(data.shifts.length === 0) return; // Hide staff who didn't work this week
+                    
+                    window.tempTimesheetData[uId] = data.shifts;
+                    
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-slate-50 transition-colors";
+                    tr.innerHTML = `
+                        <td class="py-3 px-4 font-medium text-slate-800">${data.name}</td>
+                        <td class="py-3 px-4 text-emerald-600 font-bold">${data.hours.toFixed(2)} hrs</td>
+                        <td class="py-3 px-4 text-right">
+                            <button onclick="viewTimesheetDetail('${uId}', '${data.name}')" class="bg-blue-100 text-blue-700 hover:bg-blue-200 px-3 py-1.5 rounded text-sm font-medium transition-colors"><i class="ph ph-magnifying-glass"></i> View Details</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                
+                if(tbody.innerHTML === '') {
+                    tbody.innerHTML = `<tr><td colspan="3" class="py-6 text-center text-slate-500">No labor records found for this week.</td></tr>`;
+                }
+            } catch (e) {
+                console.error(e);
+                showToast("Failed to fetch timesheets", "error");
+            }
+        };
+
+        window.viewTimesheetDetail = (uId, name) => {
+            const shifts = window.tempTimesheetData[uId];
+            if(!shifts) return;
+
+            document.getElementById('ts-modal-name').textContent = name;
+            
+            const endOfWeek = new Date(currentTsWeekStart);
+            endOfWeek.setDate(endOfWeek.getDate() + 6);
+            document.getElementById('ts-modal-week').textContent = `Week of ${currentTsWeekStart.toLocaleDateString()} - ${endOfWeek.toLocaleDateString()}`;
+            
+            const tbody = document.getElementById('ts-modal-tbody');
+            tbody.innerHTML = '';
+            
+            let total = 0;
+            shifts.sort((a,b) => new Date(a.clockIn) - new Date(b.clockIn)).forEach(s => {
+                total += s.duration;
+                const inTime = new Date(s.clockIn);
+                const outTime = s.clockOut ? new Date(s.clockOut) : null;
+                
+                tbody.innerHTML += `
+                    <tr class="border-b border-slate-100 last:border-0">
+                        <td class="py-3 px-4 font-medium text-slate-700">${inTime.toLocaleDateString()}</td>
+                        <td class="py-3 px-4 text-slate-600">${inTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                        <td class="py-3 px-4 text-slate-600">${outTime ? outTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '<span class="text-emerald-500 font-bold">Active</span>'}</td>
+                        <td class="py-3 px-4 text-right font-bold text-slate-800">${s.duration.toFixed(2)}</td>
+                    </tr>
+                `;
+            });
+            
+            document.getElementById('ts-modal-total').textContent = total.toFixed(2) + ' hrs';
+            openModal('timesheet-modal');
         };
 
         // --- PULL-SHEET LOGIC ---

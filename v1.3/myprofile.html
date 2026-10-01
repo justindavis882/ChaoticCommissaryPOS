@@ -60,6 +60,21 @@
                 </button>
             </div>
 
+            <!-- THIS WEEKS TIME -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <div class="flex justify-between items-end border-b border-slate-100 pb-2 mb-4">
+                    <h2 class="text-lg font-bold text-slate-800">This Week's Time</h2>
+                    <span class="text-sm text-slate-500" id="my-ts-week"></span>
+                </div>
+                <div class="space-y-2 mb-4 max-h-[150px] overflow-y-auto" id="my-ts-list">
+                    <div class="text-slate-400 text-sm italic">Loading timesheets...</div>
+                </div>
+                <div class="flex justify-between items-center font-bold text-lg border-t border-slate-100 pt-4">
+                    <span>Total Hours:</span>
+                    <span id="my-ts-total" class="text-emerald-600">0.00</span>
+                </div>
+            </div>
+
             <!-- SCHEDULE -->
             <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <h2 class="text-lg font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">My Upcoming Shifts</h2>
@@ -248,6 +263,59 @@
                     </div>
                 `;
             });
+
+            // Load This Week's Timesheets
+            const startOfWeek = new Date();
+            const day = startOfWeek.getDay();
+            // Calculate Monday as start of week (change the 1 to 0 if your pay period starts on Sunday)
+            const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+            startOfWeek.setDate(diff);
+            startOfWeek.setHours(0,0,0,0);
+            
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(endOfWeek.getDate() + 6);
+            endOfWeek.setHours(23,59,59,999);
+
+            document.getElementById('my-ts-week').textContent = `${startOfWeek.toLocaleDateString()} - ${endOfWeek.toLocaleDateString()}`;
+
+            const myTsSnap = await getDocs(query(timesheetsRef, where("userId", "==", currentUser.id)));
+            const myTsList = document.getElementById('my-ts-list');
+            myTsList.innerHTML = '';
+            
+            let weeklyTotal = 0;
+            const shiftsToRender = [];
+
+            myTsSnap.forEach(d => {
+                const t = d.data();
+                if(!t.clockIn) return;
+                const inDate = new Date(t.clockIn);
+                if(inDate >= startOfWeek && inDate <= endOfWeek) {
+                    let duration = 0;
+                    if(t.clockOut) {
+                        duration = (new Date(t.clockOut) - inDate) / (1000 * 60 * 60);
+                    }
+                    weeklyTotal += duration;
+                    shiftsToRender.push({ ...t, duration, inDate });
+                }
+            });
+
+            shiftsToRender.sort((a,b) => a.inDate - b.inDate);
+
+            if(shiftsToRender.length === 0) {
+                myTsList.innerHTML = '<div class="text-slate-400 text-sm">No punches this week.</div>';
+            } else {
+                shiftsToRender.forEach(s => {
+                    const outStr = s.clockOut ? new Date(s.clockOut).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '<span class="text-emerald-500 font-bold">Active</span>';
+                    myTsList.innerHTML += `
+                        <div class="flex justify-between bg-slate-50 p-2 border border-slate-200 rounded text-sm items-center">
+                            <span class="font-medium">${s.inDate.toLocaleDateString()}</span>
+                            <span class="text-slate-600 text-xs">${s.inDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${outStr}</span>
+                            <span class="font-bold">${s.duration.toFixed(2)}h</span>
+                        </div>
+                    `;
+                });
+            }
+            document.getElementById('my-ts-total').textContent = weeklyTotal.toFixed(2) + ' hrs';
         }
 
         function setClockUI(isClockedIn) {
