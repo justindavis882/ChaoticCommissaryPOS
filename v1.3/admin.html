@@ -79,7 +79,7 @@
 
             /* 3. Hide all remaining elements, only reveal print areas */
             body * { visibility: hidden !important; }
-            #print-area, #print-area *, #print-id-area, #print-id-area *, #print-report-area, #print-report-area * { 
+            #print-area, #print-area *, #print-id-area, #print-id-area *, #print-report-area, #print-report-area *, #print-timesheet-area, #print-timesheet-area *, #schedule-calendar-container, #schedule-calendar-container * { 
                 visibility: visible !important; 
             }
 
@@ -108,6 +108,31 @@
                 padding: 0;
                 background: white;
                 color: black;
+            }
+
+            /* 6. Calendar Print Layout */
+            #schedule-calendar-container {
+                display: block !important;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100% !important;
+                min-width: 1000px; /* Forces wide layout to prevent day columns from squishing */
+                height: auto !important;
+                border: none !important;
+                box-shadow: none !important;
+                overflow: visible !important;
+            }
+
+            /* Remove the scrolling lock on the grid body */
+            #calendar-body {
+                overflow: visible !important;
+                height: auto !important;
+            }
+
+            /* Hide the interactive UI elements on the printed paper */
+            #calendar-body button, #calendar-headers button {
+                display: none !important;
             }
         }
     </style>
@@ -546,10 +571,12 @@
                     </div>
 
                     <!-- Right: Weekly Calendar View -->
-                    <div class="w-full md:w-2/3 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-[600px] overflow-hidden">
-                        <div class="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                        <div id="schedule-calendar-container" class="w-full md:w-2/3 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-[600px] overflow-hidden">                        <div class="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
                             <h3 class="text-lg font-semibold text-slate-800">Weekly Calendar</h3>
                             <div class="flex items-center gap-4">
+                                <button onclick="window.print()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-sm mr-2 no-print">
+                                    <i class="ph ph-printer text-lg"></i> Print
+                                </button>
                                 <button onclick="changeScheduleWeek(-1)" class="p-1 hover:bg-slate-200 rounded transition-colors"><i class="ph ph-caret-left text-xl"></i></button>
                                 <span id="schedule-week-label" class="font-medium text-slate-600 bg-white border border-slate-200 px-3 py-1 rounded">Week of ...</span>
                                 <button onclick="changeScheduleWeek(1)" class="p-1 hover:bg-slate-200 rounded transition-colors"><i class="ph ph-caret-right text-xl"></i></button>
