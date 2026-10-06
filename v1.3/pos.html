@@ -223,7 +223,7 @@
                     <div class="bg-slate-700 p-3 rounded flex justify-between items-center border border-slate-600"><span class="text-lg">VISA</span><kbd class="bg-slate-900 px-3 py-1 rounded text-blue-400 font-bold">1</kbd></div>
                     <div class="bg-slate-700 p-3 rounded flex justify-between items-center border border-slate-600"><span class="text-lg">AMEX</span><kbd class="bg-slate-900 px-3 py-1 rounded text-blue-400 font-bold">2</kbd></div>
                     <div class="bg-slate-700 p-3 rounded flex justify-between items-center border border-slate-600"><span class="text-lg">MASTERCARD</span><kbd class="bg-slate-900 px-3 py-1 rounded text-blue-400 font-bold">3</kbd></div>
-                    <div class="bg-slate-700 p-3 rounded flex justify-between items-center border border-slate-600"><span class="text-lg">OTHER</span><kbd class="bg-slate-900 px-3 py-1 rounded text-blue-400 font-bold">4</kbd></div>
+                    <div class="bg-slate-700 p-3 rounded flex justify-between items-center border border-slate-600"><span class="text-lg">PAYPAL SCAN</span><kbd class="bg-slate-900 px-3 py-1 rounded text-blue-400 font-bold">4</kbd></div>
                 </div>
 
                 <div class="text-sm text-slate-500 mt-2">[ENTER] to submit, [ESC] to cancel tender</div>
@@ -744,7 +744,7 @@
                 if (e.key === '1') cardType = 'VISA';
                 if (e.key === '2') cardType = 'AMEX';
                 if (e.key === '3') cardType = 'MASTERCARD';
-                if (e.key === '4') cardType = 'OTHER';
+                if (e.key === '4') cardType = 'PAYPAL SCAN';
 
                 if (cardType) {
                     addPayment('CREDIT', pendingCreditAmount, `(${cardType})`);
