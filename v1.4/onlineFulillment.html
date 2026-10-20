@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Fulfillment | Chaotic Commissary</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="icon" type="image/png" href="logo.png">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9;
+            color: #0f172a;
+            overflow-x: hidden;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        @keyframes pulse-red {
+            0%, 100% { background-color: #fee2e2; border-color: #f87171; }
+            50% { background-color: #fca5a5; border-color: #ef4444; }
+        }
+        .overdue-card {
+            animation: pulse-red 2s infinite;
+        }
+
+        /* Toast notification */
+        #toast {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: translateY(100px) translateX(-50%);
+            opacity: 0;
+            pointer-events: none;
+        }
+        #toast.show {
+            transform: translateY(0) translateX(-50%);
+            opacity: 1;
+        }
+
+        /* Print Media Queries */
+        @media print {
+            body, html {
+                background: white !important;
+                height: auto !important;
+                overflow: visible !important;
+            }
+            .no-print, header, #login-screen {
+                display: none !important;
+            }
+            #print-area, #print-area * {
+                visibility: visible !important;
+            }
+            #print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 20px;
+                background: white;
+                color: black;
+                font-family: monospace;
+            }
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen" class="fixed inset-0 bg-slate-900 z-50 flex flex-col justify-center items-center transition-opacity duration-300">
+        <div class="text-center bg-slate-800 p-10 rounded-xl shadow-2xl border border-slate-700 w-96">
+            <i class="ph-fill ph-package text-5xl text-blue-400 mb-4 inline-block"></i>
+            <h1 class="text-3xl font-bold text-white mb-2">FULFILLMENT</h1>
+            <p class="text-slate-400 mb-8 text-sm">Enter Staff PIN to begin picking</p>
+            
+            <input type="password" id="staff-pin-input" class="w-full text-center text-3xl p-4 rounded-lg tracking-[0.5em] mb-4 bg-slate-900 text-blue-400 border-2 border-slate-600 focus:border-blue-500 outline-none font-mono" placeholder="••••">
+            
+            <div class="text-sm text-slate-500 mt-4">
+                [ENTER] to Unlock<br>
+                <button class="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded transition-colors" onclick="window.location.href='dash.html'">Go Back</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN DASHBOARD (Hidden until login) -->
+    <div id="dashboard" class="hidden flex-1 flex flex-col h-full">
+        <!-- Header -->
+        <header class="bg-slate-900 text-white h-16 flex items-center px-6 shadow-md flex-shrink-0 justify-between z-10">
+            <div class="flex items-center gap-3">
+                <i class="ph-fill ph-package text-2xl text-blue-400"></i>
+                <h1 class="text-xl font-bold tracking-wide">Fulfillment Station</h1>
+            </div>
+            <div class="flex items-center gap-4">
+                <span id="current-user-label" class="text-sm font-medium text-slate-300 bg-slate-800 px-3 py-1 rounded-full border border-slate-700">Staff</span>
+                <button onclick="logout()" class="text-slate-400 hover:text-white transition-colors" title="Log Out"><i class="ph ph-sign-out text-xl"></i></button>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 overflow-hidden flex gap-6 p-6">
+            
+            <!-- Pending Orders List -->
+            <div class="w-1/3 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+                <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                    <h2 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                        <i class="ph ph-clock-countdown"></i> Action Queue
+                    </h2>
+                    <span id="queue-count" class="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded">0</span>
+                </div>
+                <div id="orders-list" class="flex-1 overflow-y-auto p-2 space-y-2 bg-slate-100">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+
+            <!-- Order Details Panel -->
+            <div class="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden relative">
+                <!-- Placeholder when no order selected -->
+                <div id="no-selection" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 z-10 bg-white">
+                    <i class="ph ph-hand-pointing text-6xl mb-4 opacity-50"></i>
+                    <p class="text-lg font-medium">Select an order from the queue to view details.</p>
+                </div>
+
+                <!-- Active Order View -->
+                <div id="active-order-view" class="hidden flex-col h-full">
+                    <div class="p-6 border-b border-slate-200 bg-slate-50 flex justify-between items-start">
+                        <div>
+                            <div class="flex items-center gap-3 mb-1">
+                                <h2 id="detail-name" class="text-2xl font-bold text-slate-800">Customer Name</h2>
+                                <span id="detail-status" class="px-2 py-1 text-xs font-bold bg-amber-100 text-amber-700 rounded uppercase tracking-wider border border-amber-200">Pending</span>
+                            </div>
+                            <p class="text-sm text-slate-500 font-mono" id="detail-id">Order ID</p>
+                            <p class="text-sm text-slate-600 mt-2" id="detail-contact"></p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Target Pickup</p>
+                            <div id="detail-time" class="text-3xl font-mono font-bold text-slate-800">00:00</div>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto p-6">
+                        <h3 class="font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2">Items to Pick</h3>
+                        <ul id="detail-items" class="space-y-3">
+                            <!-- Populated via JS -->
+                        </ul>
+                    </div>
+
+                    <div class="p-6 border-t border-slate-200 bg-slate-50 flex justify-between items-center gap-4">
+                        <div class="text-2xl font-bold text-slate-800">
+                            Total: <span id="detail-total" class="text-blue-600">$0.00</span>
+                        </div>
+                        <div class="flex gap-3">
+                            <button onclick="printPickList()" class="bg-slate-200 hover:bg-slate-300 text-slate-800 px-6 py-3 rounded-xl font-bold shadow-sm transition-colors flex items-center gap-2">
+                                <i class="ph ph-printer text-xl"></i> Print Pick List
+                            </button>
+                            <button onclick="completeOrder()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-xl font-bold shadow-md transition-colors flex items-center gap-2">
+                                <i class="ph ph-check-circle text-xl"></i> Ring Up / Complete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- PRINT TEMPLATE (Hidden from UI) -->
+    <div id="print-area" class="hidden no-print">
+        <div style="border-bottom: 2px dashed #000; padding-bottom: 20px; margin-bottom: 20px; text-align: center;">
+            <h1 style="margin: 0; font-size: 24px; text-transform: uppercase;">Order Pick List</h1>
+            <p style="margin: 5px 0 0 0; font-size: 14px;">Chaotic Commissary Fulfillment</p>
+        </div>
+        
+        <div style="margin-bottom: 20px; font-size: 16px;">
+            <p><strong>Customer:</strong> <span id="print-name"></span></p>
+            <p><strong>Order ID:</strong> <span id="print-id"></span></p>
+            <p><strong>Due By:</strong> <span id="print-time" style="font-weight: bold; font-size: 18px;"></span></p>
+        </div>
+
+        <table style="width: 100%; text-align: left; border-collapse: collapse; margin-bottom: 30px;">
+            <thead>
+                <tr style="border-bottom: 2px solid #000;">
+                    <th style="padding: 10px 0;">[ ]</th>
+                    <th style="padding: 10px 0;">SKU</th>
+                    <th style="padding: 10px 0;">Item Name</th>
+                </tr>
+            </thead>
+            <tbody id="print-items-body">
+                <!-- Populated via JS -->
+            </tbody>
+        </table>
+        
+        <div style="text-align: center; font-size: 12px; margin-top: 40px; border-top: 1px solid #ccc; padding-top: 10px;">
+            Packer Signature: _______________________
+        </div>
+    </div>
+
+    <!-- Global Toast Notification -->
+    <div id="toast" class="fixed bottom-6 left-1/2 bg-slate-800 text-white px-6 py-3 rounded-xl shadow-2xl font-medium z-50 flex items-center gap-3 border border-slate-700">
+        <i id="toast-icon" class="ph ph-info text-xl"></i>
+        <span id="toast-msg">Message</span>
+    </div>
+
+    <!-- Firebase SDK Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, getDocs, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-pos-app';
+        const firebaseConfig = {
+            apiKey: "AIzaSyDuFg74Dvh8FydVdnvKlhShWTHq7SZASC0",
+            authDomain: "chaotic-commissary.firebaseapp.com",
+            projectId: "chaotic-commissary",
+            storageBucket: "chaotic-commissary.firebasestorage.app",
+            messagingSenderId: "282428310882",
+            appId: "1:282428310882:web:226ebc367cc69c296cd83b",
+            measurementId: "G-9S32HHN1Y2"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        const accountsRef = collection(db, 'artifacts', appId, 'public', 'data', 'accounts');
+        const receiptsRef = collection(db, 'artifacts', appId, 'public', 'data', 'receipts');
+
+        let currentUser = null;
+        let pendingOrders = [];
+        let activeOrderId = null;
+        let clockInterval = null;
+
+        window.showToast = (message, type = 'info') => {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toast-icon');
+            document.getElementById('toast-msg').textContent = message;
+            
+            if(type === 'error') {
+                toast.className = 'fixed bottom-6 left-1/2 bg-red-600 text-white px-6 py-3 rounded-xl shadow-2xl font-medium z-50 flex items-center gap-3';
+                icon.className = 'ph ph-warning-circle text-xl';
+            } else if (type === 'success') {
+                toast.className = 'fixed bottom-6 left-1/2 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-2xl font-medium z-50 flex items-center gap-3';
+                icon.className = 'ph ph-check-circle text-xl';
+            } else {
+                toast.className = 'fixed bottom-6 left-1/2 bg-slate-800 text-white px-6 py-3 rounded-xl shadow-2xl font-medium z-50 flex items-center gap-3';
+                icon.className = 'ph ph-info text-xl';
+            }
+
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        };
+
+        const formatMoney = (amt) => `$${parseFloat(amt).toFixed(2)}`;
+
+        // Init
+        async function initApp() {
+            try {
+                await signInAnonymously(auth);
+                document.getElementById('staff-pin-input').focus();
+            } catch (error) {
+                console.error("Init Error:", error);
+                showToast("Failed to connect to database.", "error");
+            }
+        }
+
+        // Login Logic
+        document.getElementById('staff-pin-input').addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                const pinInput = e.target;
+                const pin = pinInput.value.trim();
+                if (!pin) return;
+
+                pinInput.disabled = true;
+                showToast("Verifying...", "info");
+
+                try {
+                    const snapshot = await getDocs(accountsRef);
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        if (data.pin === pin) {
+                            currentUser = { id: doc.id, ...data };
+                        }
+                    });
+
+                    // Auto-seed admin access if db is empty (mirroring admin.html)
+                    if (snapshot.empty && pin === '1234') {
+                        currentUser = { id: 'admin-user', name: "System Admin", department: "Admin" };
+                    }
+
+                    if (currentUser) {
+                        document.getElementById('login-screen').classList.add('opacity-0', 'pointer-events-none');
+                        setTimeout(() => document.getElementById('login-screen').style.display = 'none', 300);
+                        
+                        document.getElementById('dashboard').classList.remove('hidden');
+                        document.getElementById('current-user-label').innerHTML = `<i class="ph-fill ph-user-circle"></i> ${currentUser.name}`;
+                        
+                        showToast(`Logged in as ${currentUser.name}`, "success");
+                        startOrderListener();
+                        
+                        // Start the background clock to check for overdue items
+                        if(clockInterval) clearInterval(clockInterval);
+                        clockInterval = setInterval(renderOrdersList, 30000); // Check every 30s
+                    } else {
+                        showToast("Invalid PIN.", "error");
+                        pinInput.value = '';
+                    }
+                } catch (err) {
+                    showToast("Database error during login.", "error");
+                } finally {
+                    pinInput.disabled = false;
+                    setTimeout(() => pinInput.focus(), 10);
+                }
+            }
+        });
+
+        window.logout = () => {
+            currentUser = null;
+            if(clockInterval) clearInterval(clockInterval);
+            document.getElementById('dashboard').classList.add('hidden');
+            document.getElementById('login-screen').style.display = 'flex';
+            document.getElementById('login-screen').classList.remove('opacity-0', 'pointer-events-none');
+            document.getElementById('staff-pin-input').value = '';
+            document.getElementById('staff-pin-input').focus();
+            activeOrderId = null;
+            document.getElementById('no-selection').classList.remove('hidden');
+            document.getElementById('active-order-view').classList.add('hidden');
+            document.getElementById('active-order-view').classList.remove('flex');
+        };
+
+        // Real-time Order Sync
+        function startOrderListener() {
+            onSnapshot(receiptsRef, (snapshot) => {
+                const allReceipts = [];
+                snapshot.forEach(doc => allReceipts.push({ id: doc.id, ...doc.data() }));
+                
+                // Filter for online orders waiting for pickup
+                pendingOrders = allReceipts.filter(r => r.type === 'online_order' && r.status === 'pending_pickup');
+                
+                // Sort by pickup time (earliest first)
+                pendingOrders.sort((a, b) => new Date(a.pickupTime) - new Date(b.pickupTime));
+                
+                renderOrdersList();
+                
+                // Refresh active order view if it was updated
+                if (activeOrderId) {
+                    const stillExists = pendingOrders.find(o => o.id === activeOrderId);
+                    if (stillExists) loadOrderDetails(activeOrderId);
+                    else {
+                        activeOrderId = null;
+                        document.getElementById('no-selection').classList.remove('hidden');
+                        document.getElementById('active-order-view').classList.add('hidden');
+                        document.getElementById('active-order-view').classList.remove('flex');
+                    }
+                }
+            });
+        }
+
+        window.renderOrdersList = () => {
+            const container = document.getElementById('orders-list');
+            document.getElementById('queue-count').textContent = pendingOrders.length;
+            container.innerHTML = '';
+            
+            if (pendingOrders.length === 0) {
+                container.innerHTML = `<div class="text-center p-8 text-slate-400 font-medium">No pending orders.</div>`;
+                return;
+            }
+
+            const now = new Date();
+
+            pendingOrders.forEach(order => {
+                const targetTime = new Date(order.pickupTime);
+                const isOverdue = now > targetTime;
+                const isSelected = activeOrderId === order.id;
+                
+                const timeStr = targetTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                const itemCount = (order.items || []).length;
+
+                const card = document.createElement('div');
+                card.onclick = () => loadOrderDetails(order.id);
+                // Apply visual warnings based on overdue status
+                let baseClasses = `p-4 rounded-xl cursor-pointer border transition-all ${isSelected ? 'ring-2 ring-blue-500 shadow-md' : 'hover:shadow-md'}`;
+                
+                if (isOverdue) {
+                    baseClasses += ` overdue-card text-red-900`;
+                } else {
+                    baseClasses += ` bg-white border-slate-200 text-slate-800`;
+                }
+
+                card.className = baseClasses;
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-1">
+                        <h3 class="font-bold truncate pr-2">${order.customer?.name || 'Unknown'}</h3>
+                        <span class="font-mono font-bold whitespace-nowrap ${isOverdue ? 'text-red-700' : 'text-blue-600'}">${timeStr}</span>
+                    </div>
+                    <div class="flex justify-between items-end text-sm">
+                        <span class="font-mono text-xs opacity-70">${order.id.slice(-6).toUpperCase()}</span>
+                        <span class="font-medium opacity-80">${itemCount} item${itemCount !== 1 ? 's' : ''}</span>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        };
+
+        window.loadOrderDetails = (id) => {
+            activeOrderId = id;
+            const order = pendingOrders.find(o => o.id === id);
+            if (!order) return;
+
+            renderOrdersList(); // Update selected styling in sidebar
+
+            document.getElementById('no-selection').classList.add('hidden');
+            document.getElementById('active-order-view').classList.remove('hidden');
+            document.getElementById('active-order-view').classList.add('flex');
+
+            const targetTime = new Date(order.pickupTime);
+            const isOverdue = new Date() > targetTime;
+
+            document.getElementById('detail-name').textContent = order.customer?.name || 'Unknown Customer';
+            document.getElementById('detail-id').textContent = order.id;
+            document.getElementById('detail-contact').textContent = `${order.customer?.phone || ''} | ${order.customer?.email || ''}`;
+            
+            const timeEl = document.getElementById('detail-time');
+            timeEl.textContent = targetTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            timeEl.className = `text-3xl font-mono font-bold ${isOverdue ? 'text-red-600' : 'text-slate-800'}`;
+
+            document.getElementById('detail-total').textContent = formatMoney(order.total || 0);
+
+            const itemsContainer = document.getElementById('detail-items');
+            itemsContainer.innerHTML = '';
+            
+            // Group identical items for cleaner reading during picking
+            const itemCounts = {};
+            (order.items || []).forEach(item => {
+                if(!itemCounts[item.sku]) itemCounts[item.sku] = { name: item.name, price: item.price, count: 0 };
+                itemCounts[item.sku].count++;
+            });
+
+            Object.keys(itemCounts).forEach(sku => {
+                const itm = itemCounts[sku];
+                itemsContainer.innerHTML += `
+                    <li class="flex items-center justify-between bg-white border border-slate-200 p-3 rounded-lg shadow-sm">
+                        <div class="flex items-center gap-4">
+                            <span class="w-8 h-8 rounded bg-blue-100 text-blue-700 font-bold flex items-center justify-center">${itm.count}x</span>
+                            <div>
+                                <p class="font-medium text-slate-800">${itm.name}</p>
+                                <p class="text-xs font-mono text-slate-500">${sku}</p>
+                            </div>
+                        </div>
+                    </li>
+                `;
+            });
+        };
+
+        window.printPickList = () => {
+            const order = pendingOrders.find(o => o.id === activeOrderId);
+            if (!order) return;
+
+            document.getElementById('print-name').textContent = order.customer?.name || 'Unknown';
+            document.getElementById('print-id').textContent = order.id;
+            document.getElementById('print-time').textContent = new Date(order.pickupTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+            const tbody = document.getElementById('print-items-body');
+            tbody.innerHTML = '';
+
+            // Print individual lines for checkboxes
+            (order.items || []).forEach(item => {
+                tbody.innerHTML += `
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 10px 0; font-size: 20px;">[ &nbsp; ]</td>
+                        <td style="padding: 10px 0; font-family: monospace;">${item.sku}</td>
+                        <td style="padding: 10px 0;">${item.name}</td>
+                    </tr>
+                `;
+            });
+
+            window.print();
+        };
+
+        window.completeOrder = async () => {
+            if (!activeOrderId) return;
+            const order = pendingOrders.find(o => o.id === activeOrderId);
+            if (!order) return;
+
+            if(!confirm(`Ring up and complete order for ${order.customer?.name}?`)) return;
+
+            try {
+                // Update status in receipts ledger. Admin reporting will natively pick this up.
+                await updateDoc(doc(receiptsRef, activeOrderId), {
+                    status: 'completed',
+                    fulfilledBy: currentUser.name,
+                    fulfilledAt: new Date().toISOString()
+                });
+                
+                showToast("Order completed successfully!", "success");
+                
+                // The onSnapshot listener will automatically remove it from the pendingOrders array
+                // and clear the active view via the startOrderListener logic.
+
+            } catch (err) {
+                console.error(err);
+                showToast("Error updating order.", "error");
+            }
+        };
+
+        // Boot
+        window.addEventListener('DOMContentLoaded', initApp);
+
+    </script>
+</body>
+</html>
