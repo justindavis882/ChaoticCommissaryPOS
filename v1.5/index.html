@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Online Shop | Chaotic Commissary</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://unpkg.com/@phosphor-icons/web"></script>
+        
+        <!-- Replace YOUR_PAYPAL_CLIENT_ID with your PayPal REST App Client ID -->
+        <script src="https://www.paypal.com/sdk/js?currency=USD&client-id=BAA40StwGiqW8zUc_WjTtH4QiXCFjdqd-BpXmdJYwU1WCpdkaZiCNl1sy0-IU0U-N51EihgabLR-7reF_Q"></script>
+        
+        <link rel="icon" type="image/png" href="logo.png">
+        
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
+            
+            body {
+                font-family: 'JetBrains Mono', monospace;
+                background-color: #05001F;
+                color: #e2e8f0;
+                overflow-x: hidden;
+            }
+
+            .bg-logo {
+                position: fixed;
+                width: 1000px;
+                height: 1000px;
+                background-image: url('logo.png');
+                background-size: contain;
+                background-repeat: no-repeat;
+                background-position: bottom right;
+                opacity: 0.15;
+                z-index: -1;
+                pointer-events: none;
+                bottom: 0;
+                right: 0;
+            }
+
+            ::-webkit-scrollbar { width: 8px; }
+            ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+            ::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 4px; }
+            ::-webkit-scrollbar-thumb:hover { background: #60a5fa; }
+        </style>
+    </head>
+    <body class="relative min-h-screen w-full pb-20">
+        <div class="bg-logo"></div>
+
+        <!-- Navigation Header -->
+        <header class="w-full p-6 flex justify-between items-start z-10 bg-slate-900/80 backdrop-blur-md sticky top-0 border-b border-blue-900/50 shadow-lg">
+            <div>
+                <h1 class="text-4xl md:text-5xl font-extrabold text-blue-400 tracking-tight mb-2 uppercase drop-shadow-md">
+                    Chaotic Commissary
+                </h1>
+                <p class="text-slate-400 text-sm md:text-lg tracking-widest uppercase">
+                    Your Online Shop for Chaotically Good Items
+                </p>
+            </div>
+            
+            <button onclick="toggleCart()" class="relative bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-xl shadow-lg transition-all flex items-center gap-2 group">
+                <i class="ph ph-shopping-cart text-3xl"></i>
+                <span id="cart-count" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold w-7 h-7 flex items-center justify-center rounded-full border-2 border-[#05001F]">0</span>
+            </button>
+        </header>
+
+        <!-- Free Shipping Banner -->
+        <div class="bg-blue-900/40 border-b border-blue-800/50 text-center py-2 px-4 text-xs md:text-sm text-blue-200 tracking-wide">
+            <i class="ph ph-truck inline mr-1"></i> Free Shipping on orders over $35.00 • Flat $6.95 shipping under $35
+        </div>
+
+        <!-- Main Product Grid -->
+        <main class="max-w-7xl mx-auto p-6 mt-4">
+            <div id="product-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <div class="col-span-full text-center text-slate-500 py-12 animate-pulse">Loading inventory...</div>
+            </div>
+        </main>
+
+        <footer class="absolute bottom-0 w-full p-6 text-center text-slate-400 text-sm border-t border-slate-800">
+            © 2026 Chaotic Commissary. All rights reserved.
+            <a href="dash.html" class="text-blue-400 hover:underline ml-4">Admin Dashboard</a>
+        </footer>
+
+        <!-- Cart Slide-Over -->
+        <div id="cart-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 hidden transition-opacity" onclick="toggleCart()"></div>
+        <div id="cart-panel" class="fixed top-0 right-0 h-full w-full md:w-[480px] bg-slate-900 border-l border-slate-700 shadow-2xl z-50 transform translate-x-full transition-transform duration-300 flex flex-col">
+            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2"><i class="ph ph-shopping-cart"></i> Your Cart</h2>
+                <button onclick="toggleCart()" class="text-slate-400 hover:text-white transition-colors"><i class="ph ph-x text-2xl"></i></button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                <!-- Cart Items -->
+                <div id="cart-items" class="space-y-3">
+                    <div class="text-slate-500 text-center py-10 italic">Your cart is empty.</div>
+                </div>
+
+                <!-- Promo Code -->
+                <div class="flex gap-2">
+                    <input type="text" id="promo-input" placeholder="Promo Code (e.g. WELCOME10)" class="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white uppercase focus:outline-none focus:border-blue-500">
+                    <button type="button" onclick="applyPromo()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold rounded-lg transition-colors">Apply</button>
+                </div>
+
+                <!-- Totals Breakdown -->
+                <div class="bg-slate-800/80 border border-slate-700 rounded-xl p-4 space-y-2 text-sm">
+                    <div class="flex justify-between text-slate-400">
+                        <span>Subtotal</span>
+                        <span id="cart-subtotal">$0.00</span>
+                    </div>
+                    <div id="discount-row" class="hidden flex justify-between text-emerald-400">
+                        <span>Discount (<span id="promo-label"></span>)</span>
+                        <span id="cart-discount">-$0.00</span>
+                    </div>
+                    <div class="flex justify-between text-slate-400">
+                        <span>Shipping</span>
+                        <span id="cart-shipping">$0.00</span>
+                    </div>
+                    <div class="flex justify-between items-center pt-2 border-t border-slate-700 text-xl font-bold">
+                        <span class="text-white">Total</span>
+                        <span id="cart-total" class="text-blue-400">$0.00</span>
+                    </div>
+                </div>
+
+                <!-- Fulfillment Toggle -->
+                <div class="grid grid-cols-2 gap-2 bg-slate-800 p-1 rounded-xl border border-slate-700">
+                    <button type="button" id="btn-mode-shipping" onclick="setFulfillmentMode('shipping')" class="py-2 rounded-lg text-sm font-bold bg-blue-600 text-white transition-colors">
+                        <i class="ph ph-truck mr-1"></i> Ship Order
+                    </button>
+                    <button type="button" id="btn-mode-pickup" onclick="setFulfillmentMode('pickup')" class="py-2 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-colors">
+                        <i class="ph ph-storefront mr-1"></i> Local Pickup
+                    </button>
+                </div>
+
+                <!-- Customer & Shipping Form -->
+                <form id="checkout-form" class="space-y-3" onsubmit="return false;">
+                    <input type="text" id="cust-name" required placeholder="Full Name" class="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500">
+                    <div class="flex gap-3">
+                        <input type="tel" id="cust-phone" required placeholder="Phone Number" class="w-1/2 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500">
+                        <input type="email" id="cust-email" required placeholder="Email Address" class="w-1/2 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500">
+                    </div>
+
+                    <!-- Shipping Address Fields -->
+                    <div id="shipping-fields" class="space-y-3 pt-2 border-t border-slate-800">
+                        <p class="text-xs text-slate-400 uppercase tracking-wider font-bold">Shipping Address</p>
+                        <input type="text" id="ship-street" required placeholder="Street Address" class="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500">
+                        <input type="text" id="ship-apt" placeholder="Apt / Suite (Optional)" class="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500">
+                        <div class="grid grid-cols-6 gap-2">
+                            <input type="text" id="ship-city" required placeholder="City" class="col-span-3 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500">
+                            <input type="text" id="ship-state" required placeholder="NJ" maxlength="2" class="col-span-1 px-2 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white text-center uppercase focus:outline-none focus:border-blue-500">
+                            <input type="text" id="ship-zip" required placeholder="ZIP" maxlength="10" class="col-span-2 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500">
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Payment Handoff Area -->
+                <div class="pt-2 space-y-3">
+                    <!-- PayPal Smart Buttons (PayPal + Debit/Credit) -->
+                    <div id="paypal-button-container"></div>
+
+                    <!-- Optional Stripe Checkout Handoff -->
+                    <button type="button" id="stripe-checkout-btn" onclick="startStripeCheckout()" class="hidden w-full bg-[#635BFF] hover:bg-[#5851df] text-white font-bold py-3.5 rounded-xl shadow-lg transition-colors flex justify-center items-center gap-2">
+                        <i class="ph ph-credit-card text-xl"></i> Pay with Stripe
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Success Modal -->
+        <div id="success-modal" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[60] hidden flex-col justify-center items-center p-6 text-center">
+            <i class="ph-fill ph-check-circle text-7xl text-emerald-400 mb-6 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]"></i>
+            <h2 class="text-4xl font-extrabold text-white mb-2 uppercase">Order Paid!</h2>
+            <p id="success-subtitle" class="text-lg text-slate-300 mb-8">We're packing your order for shipment.</p>
+            
+            <div class="bg-slate-800 border border-slate-700 p-8 rounded-2xl max-w-md w-full shadow-2xl">
+                <p id="success-label" class="text-slate-400 uppercase tracking-widest text-sm mb-2">Shipping To</p>
+                <div id="success-detail-display" class="text-lg font-bold text-blue-400 mb-6 font-mono">--</div>
+                
+                <p class="text-slate-400 text-sm mb-6">Order ID: <span id="success-order-id" class="font-mono text-white"></span></p>
+                
+                <button onclick="closeSuccessModal()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-lg transition-colors">
+                    Continue Shopping
+                </button>
+            </div>
+        </div>
+
+        <!-- Global Toast -->
+        <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 translate-y-24 opacity-0 bg-slate-800 text-white px-6 py-3 rounded-xl shadow-2xl font-medium z-[70] flex items-center gap-3 border border-slate-700 transition-all duration-300">
+            <i id="toast-icon" class="ph ph-info text-xl"></i>
+            <span id="toast-msg">Message</span>
+        </div>
+
+        <!-- Firebase & App Logic -->
+        <script type="module">
+            import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+            import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+            import { getFirestore, collection, doc, getDocs, getDoc, setDoc, updateDoc, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+            // --- STORE SETTINGS (Edit these anytime) ---
+            const SHIPPING_FLAT_RATE = 6.95;
+            const FREE_SHIPPING_THRESHOLD = 35.00;
+            const PROMO_CODES = {
+                'WELCOME10': 0.10, // 10% off (safe for Rada MAP if marked up 15%)
+                'VIP10': 0.10
+            };
+            // Optional: Paste your serverless Stripe endpoint URL here to enable the Stripe button
+            const STRIPE_ENDPOINT_URL = ""; 
+
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-pos-app';
+            const firebaseConfig = {
+                apiKey: "AIzaSyDuFg74Dvh8FydVdnvKlhShWTHq7SZASC0",
+                authDomain: "chaotic-commissary.firebaseapp.com",
+                projectId: "chaotic-commissary",
+                storageBucket: "chaotic-commissary.firebasestorage.app",
+                messagingSenderId: "282428310882",
+                appId: "1:282428310882:web:226ebc367cc69c296cd83b",
+                measurementId: "G-9S32HHN1Y2"
+            };
+
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            const db = getFirestore(app);
+
+            const inventoryRef = collection(db, 'artifacts', appId, 'public', 'data', 'inventory');
+            const receiptsRef = collection(db, 'artifacts', appId, 'public', 'data', 'receipts');
+            const discountsRef = collection(db, 'artifacts', appId, 'public', 'data', 'discounts');
+
+            let inventory = [];
+            let cart = [];
+            let fulfillmentMode = 'shipping'; // 'shipping' | 'pickup'
+            let activePromo = null;
+
+            const formatMoney = (amt) => `$${parseFloat(amt).toFixed(2)}`;
+
+            window.showToast = (message, type = 'info') => {
+                const toast = document.getElementById('toast');
+                document.getElementById('toast-msg').textContent = message;
+                toast.className = `fixed bottom-6 left-1/2 transform -translate-x-1/2 translate-y-0 opacity-100 text-white px-6 py-3 rounded-xl shadow-2xl font-medium z-[70] flex items-center gap-3 border transition-all duration-300 ${type === 'error' ? 'bg-red-600 border-red-500' : 'bg-emerald-600 border-emerald-500'}`;
+                setTimeout(() => toast.classList.replace('translate-y-0', 'translate-y-24'), 3000);
+                setTimeout(() => toast.classList.replace('opacity-100', 'opacity-0'), 3000);
+            };
+
+            window.toggleCart = () => {
+                const panel = document.getElementById('cart-panel');
+                const overlay = document.getElementById('cart-overlay');
+                panel.classList.toggle('translate-x-full');
+                overlay.classList.toggle('hidden');
+            };
+
+            window.setFulfillmentMode = (mode) => {
+                fulfillmentMode = mode;
+                const shipBtn = document.getElementById('btn-mode-shipping');
+                const pickBtn = document.getElementById('btn-mode-pickup');
+                const shipFields = document.getElementById('shipping-fields');
+
+                if (mode === 'shipping') {
+                    shipBtn.className = 'py-2 rounded-lg text-sm font-bold bg-blue-600 text-white transition-colors';
+                    pickBtn.className = 'py-2 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-colors';
+                    shipFields.classList.remove('hidden');
+                } else {
+                    pickBtn.className = 'py-2 rounded-lg text-sm font-bold bg-blue-600 text-white transition-colors';
+                    shipBtn.className = 'py-2 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-colors';
+                    shipFields.classList.add('hidden');
+                }
+                updateCartUI();
+            };
+
+            window.applyPromo = async () => {
+                const code = document.getElementById('promo-input').value.trim().toUpperCase();
+                if (!code) {
+                    activePromo = null;
+                    updateCartUI();
+                    return;
+                }
+
+                try {
+                    const snap = await getDoc(doc(discountsRef, code));
+                    if (!snap.exists()) {
+                        activePromo = null;
+                        updateCartUI();
+                        return showToast('Invalid promo code.', 'error');
+                    }
+
+                    const promo = snap.data();
+                    const today = new Date().toISOString().split('T')[0];
+
+                    if (!promo.active) return showToast('This promo code is no longer active.', 'error');
+                    if (promo.expiresAt && today > promo.expiresAt) return showToast('This promo code has expired.', 'error');
+                    if (promo.maxUses && (promo.uses || 0) >= promo.maxUses) return showToast('This promo code has reached its usage limit.', 'error');
+
+                    activePromo = promo;
+                    updateCartUI();
+                    showToast(`Promo ${code} applied!`, 'success');
+                } catch (err) {
+                    console.error(err);
+                    showToast('Could not verify promo code.', 'error');
+                }
+            };
+
+            function getOrderTotals() {
+                const subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+                const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
+
+                let discount = 0;
+                let freeShippingPromo = false;
+
+                if (activePromo) {
+                    const meetsSub = subtotal >= (activePromo.minSubtotal || 0);
+                    const meetsItems = totalItems >= (activePromo.minItems || 0);
+
+                    if (meetsSub && meetsItems) {
+                        if (activePromo.type === 'percent') {
+                            discount = +(subtotal * (activePromo.value / 100)).toFixed(2);
+                        } else if (activePromo.type === 'flat') {
+                            discount = Math.min(subtotal, parseFloat(activePromo.value));
+                        } else if (activePromo.type === 'free_shipping') {
+                            freeShippingPromo = true;
+                        }
+                    }
+                }
+
+                const afterDiscount = Math.max(0, subtotal - discount);
+                const shipping = (fulfillmentMode === 'shipping' && cart.length > 0 && afterDiscount < FREE_SHIPPING_THRESHOLD && !freeShippingPromo)
+                    ? SHIPPING_FLAT_RATE
+                    : 0;
+                const total = +(afterDiscount + shipping).toFixed(2);
+
+                return { subtotal, discount, shipping, total };
+            }
+
+            function validateCustomerForm() {
+                const name = document.getElementById('cust-name').value.trim();
+                const phone = document.getElementById('cust-phone').value.trim();
+                const email = document.getElementById('cust-email').value.trim();
+
+                if (!name || !phone || !email) {
+                    showToast('Please enter your name, phone, and email first.', 'error');
+                    return null;
+                }
+
+                let shippingAddress = null;
+                if (fulfillmentMode === 'shipping') {
+                    const street = document.getElementById('ship-street').value.trim();
+                    const apt = document.getElementById('ship-apt').value.trim();
+                    const city = document.getElementById('ship-city').value.trim();
+                    const state = document.getElementById('ship-state').value.trim().toUpperCase();
+                    const zip = document.getElementById('ship-zip').value.trim();
+
+                    if (!street || !city || !state || !zip) {
+                        showToast('Please complete your shipping address.', 'error');
+                        return null;
+                    }
+                    shippingAddress = { street, apt, city, state, zip };
+                }
+
+                return { name, phone, email, shippingAddress };
+            }
+
+            // Init App
+            async function initShop() {
+                try {
+                    await signInAnonymously(auth);
+                    await fetchInventory();
+                    if (STRIPE_ENDPOINT_URL) {
+                        document.getElementById('stripe-checkout-btn').classList.remove('hidden');
+                    }
+                    initPayPalButtons();
+                } catch (error) {
+                    console.error("Init Error:", error);
+                    document.getElementById('product-list').innerHTML = `<div class="col-span-full text-center text-red-500 py-12">Failed to load shop data.</div>`;
+                }
+            }
+
+            async function fetchInventory() {
+                const snapshot = await getDocs(inventoryRef);
+                inventory = [];
+                snapshot.forEach(doc => inventory.push({ id: doc.id, ...doc.data() }));
+                renderProducts();
+            }
+
+            function renderProducts() {
+                const grid = document.getElementById('product-list');
+                grid.innerHTML = '';
+                
+                if (inventory.length === 0) {
+                    grid.innerHTML = '<div class="col-span-full text-center text-slate-500 py-12">No products available at this time.</div>';
+                    return;
+                }
+
+                inventory.forEach(item => {
+                    let finalPrice = item.price;
+                    if (item.modifier && item.modifier.active) {
+                        if (item.modifier.type === 'percent') finalPrice = item.price * (1 + (item.modifier.value / 100));
+                        else if (item.modifier.type === 'flat') finalPrice = item.price + item.modifier.value;
+                        finalPrice = Math.max(0, finalPrice);
+                    }
+
+                    const outOfStock = (item.stock || (item.floorStock || 0) + (item.backroomStock || 0)) <= 0 && !item.isBundle;
+
+                    const card = document.createElement('div');
+                    card.className = "bg-slate-800/50 border border-slate-700/50 p-5 rounded-2xl flex flex-col hover:bg-slate-800 transition-colors shadow-lg backdrop-blur-sm";
+                    card.innerHTML = `
+                        <div class="h-48 w-full bg-slate-900 rounded-xl mb-4 overflow-hidden flex items-center justify-center border border-slate-700/50">
+                            ${item.imageUrl 
+                                ? `<img src="${item.imageUrl}" alt="${item.name}" class="object-cover h-full w-full hover:scale-105 transition-transform duration-300">` 
+                                : `<i class="ph ph-image text-5xl text-slate-700"></i>`
+                            }
+                        </div>
+                        <div class="flex-1">
+                            <div class="flex justify-between items-start mb-2">
+                                <h3 class="font-bold text-lg text-white leading-tight">${item.name}</h3>
+                                <span class="bg-slate-900 border border-blue-900 text-blue-400 px-2 py-1 rounded text-sm font-bold font-mono">${formatMoney(finalPrice)}</span>
+                            </div>
+                            <p class="text-xs text-slate-500 font-mono mb-4">SKU: ${item.sku}</p>
+                        </div>
+                        <button onclick="addToCart('${item.sku}', ${finalPrice})" 
+                            class="w-full py-3 rounded-lg font-bold transition-all flex justify-center items-center gap-2 ${outOfStock ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-md'}"
+                            ${outOfStock ? 'disabled' : ''}>
+                            <i class="ph ${outOfStock ? 'ph-prohibit' : 'ph-shopping-cart-simple'} text-xl"></i>
+                            ${outOfStock ? 'Out of Stock' : 'Add to Cart'}
+                        </button>
+                    `;
+                    grid.appendChild(card);
+                });
+            }
+
+            window.addToCart = (sku, price) => {
+                const item = inventory.find(i => i.sku === sku);
+                if (!item) return;
+                const existing = cart.find(i => i.sku === sku);
+                if (existing) existing.qty += 1;
+                else cart.push({ sku: item.sku, name: item.name, price: price, qty: 1 });
+                updateCartUI();
+                showToast(`Added ${item.name} to cart`, 'success');
+            };
+
+            window.updateItemQty = (sku, change) => {
+                const item = cart.find(i => i.sku === sku);
+                if (!item) return;
+                item.qty += change;
+                if (item.qty <= 0) cart = cart.filter(i => i.sku !== sku);
+                updateCartUI();
+            };
+
+            function updateCartUI() {
+                const container = document.getElementById('cart-items');
+                const countBadge = document.getElementById('cart-count');
+                const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
+                const { subtotal, discount, shipping, total } = getOrderTotals();
+
+                countBadge.textContent = totalItems;
+                document.getElementById('cart-subtotal').textContent = formatMoney(subtotal);
+                document.getElementById('cart-shipping').textContent = fulfillmentMode === 'pickup' ? 'Pickup ($0.00)' : (shipping === 0 && cart.length > 0 ? 'FREE' : formatMoney(shipping));
+                document.getElementById('cart-total').textContent = formatMoney(total);
+
+                const discountRow = document.getElementById('discount-row');
+                if (discount > 0) {
+                    discountRow.classList.remove('hidden');
+                    document.getElementById('promo-label').textContent = activePromo.code;
+                    document.getElementById('cart-discount').textContent = `-${formatMoney(discount)}`;
+                } else {
+                    discountRow.classList.add('hidden');
+                }
+
+                if (cart.length === 0) {
+                    container.innerHTML = '<div class="text-slate-500 text-center py-10 italic">Your cart is empty.</div>';
+                    return;
+                }
+
+                container.innerHTML = cart.map(item => `
+                    <div class="bg-slate-800/80 border border-slate-700 p-3 rounded-xl flex justify-between items-center">
+                        <div class="flex-1">
+                            <h4 class="font-bold text-white text-sm">${item.name}</h4>
+                            <div class="text-blue-400 font-mono text-xs">${formatMoney(item.price)}</div>
+                        </div>
+                        <div class="flex items-center gap-2 bg-slate-900 rounded-lg p-1 border border-slate-700">
+                            <button onclick="updateItemQty('${item.sku}', -1)" class="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 rounded"><i class="ph ph-minus"></i></button>
+                            <span class="font-bold text-white w-4 text-center text-sm">${item.qty}</span>
+                            <button onclick="updateItemQty('${item.sku}', 1)" class="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 rounded"><i class="ph ph-plus"></i></button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            // Save Paid Order to Firestore
+            async function savePaidOrder(customerInfo, paymentMethod, transactionId) {
+                const { subtotal, discount, shipping, total } = getOrderTotals();
+                const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
+                const pickupDate = new Date();
+                pickupDate.setMinutes(pickupDate.getMinutes() + (totalItems * 5));
+
+                // Flatten cart for Admin Returns compatibility
+                const receiptItems = [];
+                cart.forEach(cartItem => {
+                    for (let i = 0; i < cartItem.qty; i++) {
+                        receiptItems.push({ sku: cartItem.sku, name: cartItem.name, price: cartItem.price });
+                    }
+                });
+
+                const orderData = {
+                    timestamp: serverTimestamp(),
+                    type: 'online_order',
+                    fulfillmentMethod: fulfillmentMode, // 'shipping' or 'pickup'
+                    status: 'pending_pickup', // Keeps compatibility with onlineFulillment.html
+                    customer: {
+                        name: customerInfo.name,
+                        phone: customerInfo.phone,
+                        email: customerInfo.email
+                    },
+                    shippingAddress: customerInfo.shippingAddress,
+                    items: receiptItems,
+                    subtotal,
+                    discount,
+                    promoCode: activePromo ? activePromo.code : null,
+                    shippingCost: shipping,
+                    total,
+                    pickupTime: pickupDate.toISOString(),
+                    payments: [{ method: paymentMethod, amount: total, meta: transactionId }]
+                };
+
+                const newDocRef = doc(receiptsRef);
+                await setDoc(newDocRef, orderData);
+
+                if (activePromo) {
+                    await updateDoc(doc(discountsRef, activePromo.code), { uses: increment(1) });
+                }
+
+                toggleCart();
+                document.getElementById('success-order-id').textContent = newDocRef.id;
+
+                if (fulfillmentMode === 'shipping') {
+                    const a = customerInfo.shippingAddress;
+                    document.getElementById('success-subtitle').textContent = "Payment confirmed! We're packing your order for shipment.";
+                    document.getElementById('success-label').textContent = 'Shipping To';
+                    document.getElementById('success-detail-display').textContent = `${a.street}${a.apt ? ' ' + a.apt : ''}, ${a.city}, ${a.state} ${a.zip}`;
+                } else {
+                    document.getElementById('success-subtitle').textContent = 'Payment confirmed! Your items are being gathered.';
+                    document.getElementById('success-label').textContent = 'Estimated Pickup Time';
+                    document.getElementById('success-detail-display').textContent = pickupDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                }
+
+                document.getElementById('success-modal').classList.remove('hidden');
+                document.getElementById('success-modal').classList.add('flex');
+
+                cart = [];
+                activePromo = null;
+                document.getElementById('promo-input').value = '';
+                document.getElementById('checkout-form').reset();
+                updateCartUI();
+            }
+
+            // PayPal Smart Buttons
+            function initPayPalButtons() {
+                if (typeof paypal === 'undefined') return;
+                paypal.Buttons({
+                    style: { layout: 'vertical', color: 'blue', shape: 'rect', label: 'checkout' },
+                    onClick: (data, actions) => {
+                        if (cart.length === 0) {
+                            showToast('Your cart is empty.', 'error');
+                            return actions.reject();
+                        }
+                        if (!validateCustomerForm()) return actions.reject();
+                        return actions.resolve();
+                    },
+                    createOrder: (data, actions) => {
+                        const { total } = getOrderTotals();
+                        return actions.order.create({
+                            purchase_units: [{
+                                description: 'Chaotic Commissary Order',
+                                amount: { currency_code: 'USD', value: total.toFixed(2) }
+                            }]
+                        });
+                    },
+                    onApprove: async (data, actions) => {
+                        try {
+                            const details = await actions.order.capture();
+                            const customerInfo = validateCustomerForm();
+                            await savePaidOrder(customerInfo, 'PAYPAL', details.id);
+                        } catch (err) {
+                            console.error(err);
+                            showToast('Payment captured, but order save failed. Contact support.', 'error');
+                        }
+                    },
+                    onError: (err) => {
+                        console.error('PayPal Error:', err);
+                        showToast('Payment could not be completed.', 'error');
+                    }
+                }).render('#paypal-button-container');
+            }
+
+            // Optional Stripe Checkout Handoff
+            window.startStripeCheckout = async () => {
+                if (cart.length === 0) return showToast('Your cart is empty.', 'error');
+                const customerInfo = validateCustomerForm();
+                if (!customerInfo) return;
+
+                const { shipping, discount } = getOrderTotals();
+                try {
+                    const res = await fetch(STRIPE_ENDPOINT_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ cart, customerInfo, fulfillmentMode, shipping, discount })
+                    });
+                    const data = await res.json();
+                    if (data.url) window.location.href = data.url;
+                    else showToast('Could not start Stripe Checkout.', 'error');
+                } catch (err) {
+                    console.error(err);
+                    showToast('Stripe connection error.', 'error');
+                }
+            };
+
+            window.closeSuccessModal = () => {
+                document.getElementById('success-modal').classList.add('hidden');
+                document.getElementById('success-modal').classList.remove('flex');
+            };
+
+            window.addEventListener('DOMContentLoaded', initShop);
+        </script>
+    </body>
+</html>
