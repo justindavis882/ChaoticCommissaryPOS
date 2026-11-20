@@ -1309,7 +1309,7 @@
 
         window.closeModals = () => {
             document.getElementById('modal-backdrop').classList.add('hidden');
-            ['inv-form-sku', 'inv-form-name', 'inv-form-price', 'inv-form-location', 'inv-form-floor', 'inv-form-backroom',
+            ['inv-form-sku', 'inv-form-name', 'inv-form-image', 'inv-form-price', 'inv-form-location', 'inv-form-floor', 'inv-form-backroom',
             'user-form-id', 'user-form-name', 'user-form-pin'].forEach(id => {
                 const el = document.getElementById(id);
                 if(el) el.value = '';
@@ -1420,6 +1420,7 @@
             skuInput.value = item.sku;
             skuInput.disabled = true;
             document.getElementById('inv-form-name').value = item.name;
+            document.getElementById('inv-form-image').value = item.imageUrl || '';
             document.getElementById('inv-form-price').value = item.price;
             document.getElementById('inv-form-location').value = item.location || '';
             document.getElementById('inv-form-floor').value = item.floorStock || 0;
